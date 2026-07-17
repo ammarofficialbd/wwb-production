@@ -10,6 +10,7 @@ import {
   Bell,
   ChevronDown,
   User as UserIcon,
+  Menu,
 } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { useAuth } from "@/context/AuthContext";
@@ -24,15 +25,25 @@ const navItems = [
 interface TopNavProps {
   onToggleSidebar?: () => void;
   isSidebarCollapsed?: boolean;
+  onToggleMobileMenu?: () => void;
 }
 
-export default function TopNav({ onToggleSidebar, isSidebarCollapsed }: TopNavProps) {
+export default function TopNav({ onToggleSidebar, isSidebarCollapsed, onToggleMobileMenu }: TopNavProps) {
   const { user, setShowLoginModal, setShowChatPanel } = useAuth();
 
   return (
-    <header className="top-nav flex items-center">
+    <header className="top-nav flex items-center w-full">
+      {/* Mobile Menu Toggle */}
+      <button 
+        className="lg:hidden top-nav__icon-btn mr-1" 
+        onClick={onToggleMobileMenu}
+        aria-label="Open mobile menu"
+      >
+        <Menu size={20} strokeWidth={2.5} />
+      </button>
+
       {/* Nav tabs - left aligned */}
-      <nav className="top-nav__tabs">
+      <nav className="top-nav__tabs hidden sm:flex">
         {navItems.map(({ label, icon: Icon, active }) =>
           active ? (
             <button key={label} className="top-nav__tab top-nav__tab--active">

@@ -14,6 +14,7 @@ import DiscussionPage from "@/components/DiscussionPage";
 export default function Home() {
   const [activePage, setActivePage] = useState("Dashboard");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user } = useAuth();
   
   // Default to buyer if no user is logged in for preview purposes
@@ -23,19 +24,39 @@ export default function Home() {
     <div className="min-h-screen p-4 lg:p-6 relative">
       <LoginModal />
       <ChatPanel />
-      <div className="max-w-[2000px] mx-auto flex flex-col lg:flex-row gap-4">
-        <Sidebar 
-          activePage={activePage} 
-          onNavigate={setActivePage} 
-          isCollapsed={isSidebarCollapsed}
-          onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        />
+      <div className="max-w-[2000px] mx-auto flex flex-col lg:flex-row gap-4 relative">
+        {/* Mobile Overlay */}
+        {isMobileMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+        )}
+
+        {/* Sidebar Wrapper */}
+        <div 
+          className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 lg:relative lg:translate-x-0 ${
+            isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <Sidebar 
+            activePage={activePage} 
+            onNavigate={(page) => {
+              setActivePage(page);
+              setIsMobileMenuOpen(false); // Close mobile menu after navigation
+            }} 
+            isCollapsed={isSidebarCollapsed}
+            onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            onCloseMobile={() => setIsMobileMenuOpen(false)}
+          />
+        </div>
 
         {/* Main content */}
         <main className="flex-1 min-w-0 flex flex-col gap-6">
           <TopNav 
             onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)} 
-            isSidebarCollapsed={isSidebarCollapsed} 
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           />
 
           {activePage === "My Feed" ? (

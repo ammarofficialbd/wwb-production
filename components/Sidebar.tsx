@@ -37,9 +37,10 @@ interface SidebarProps {
   onNavigate?: (label: string) => void;
   isCollapsed?: boolean;
   onToggleSidebar?: () => void;
+  onCloseMobile?: () => void;
 }
 
-export default function Sidebar({ activePage = "Dashboard", onNavigate, isCollapsed = false, onToggleSidebar }: SidebarProps) {
+export default function Sidebar({ activePage = "Dashboard", onNavigate, isCollapsed = false, onToggleSidebar, onCloseMobile }: SidebarProps) {
   const { user, setShowLoginModal, logout } = useAuth();
 
   const handleNav = (label: string, requiresAuth: boolean) => {
@@ -52,15 +53,22 @@ export default function Sidebar({ activePage = "Dashboard", onNavigate, isCollap
 
   return (
     <aside 
-      className={`shrink-0 bg-white rounded-3xl p-6 flex flex-col transition-all duration-300 ease-in-out relative overflow-y-auto lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] ${
-        isCollapsed ? "w-full lg:w-[72px] items-center px-4" : "w-full lg:w-[260px]"
+      className={`shrink-0 bg-white p-6 flex flex-col transition-all duration-300 ease-in-out relative overflow-y-auto h-full w-[260px] lg:rounded-3xl lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] ${
+        isCollapsed ? "lg:w-[72px] items-center px-4" : "lg:w-[260px]"
       }`}
     >
       <div className={`flex items-center gap-2 mb-10 ${isCollapsed ? "justify-center" : ""}`}>
         <button
           onClick={onToggleSidebar}
-          className="w-8 h-8 rounded-lg bg-[var(--ink)] flex items-center justify-center text-white shrink-0 hover:opacity-80 transition-opacity active:scale-95 cursor-pointer"
+          className="hidden lg:flex w-8 h-8 rounded-lg bg-[var(--ink)] items-center justify-center text-white shrink-0 hover:opacity-80 transition-opacity active:scale-95 cursor-pointer"
           aria-label="Toggle Sidebar"
+        >
+          <Layers size={18} strokeWidth={2.5} />
+        </button>
+        <button
+          onClick={onCloseMobile}
+          className="lg:hidden w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+          aria-label="Close Mobile Sidebar"
         >
           <Layers size={18} strokeWidth={2.5} />
         </button>
