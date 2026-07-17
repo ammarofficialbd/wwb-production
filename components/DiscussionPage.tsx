@@ -608,7 +608,7 @@ export default function DiscussionPage() {
             <h3 className="font-bold text-gray-900 text-[15px] mb-3">Thread activity</h3>
             <div className="flex gap-1">
               {[...Array(15)].map((_, i) => (
-                <div key={i} className="flex-1 h-2 rounded-sm" style={{ background: i < 8 ? "#0FDE75" : "rgba(15,222,117,0.2)" }} opacity={i > 10 ? 0.3 : 1} />
+                <div key={i} className="flex-1 h-2 rounded-sm" style={{ background: i < 8 ? "#0FDE75" : "rgba(15,222,117,0.2)", opacity: i > 10 ? 0.3 : 1 }} />
               ))}
             </div>
           </div>

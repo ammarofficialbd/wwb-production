@@ -755,7 +755,7 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
           {/* Tags */}
           <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-gray-100">
             <span className="text-[12px] font-bold text-gray-500">Tags:</span>
-            {Array.from(new Set(content.tags.concat([content.category, "Business", "Growth"]).filter(Boolean))).map((tag: string, index: number) => (
+            {(Array.from(new Set(content.tags.concat([content.category, "Business", "Growth"]).filter(Boolean))) as string[]).map((tag: string, index: number) => (
               <span key={`${tag}-${index}`} className="text-[11px] font-semibold text-gray-600 bg-gray-100 hover:bg-[#f0faf0] hover:text-[#5cb85c] border border-gray-200 hover:border-[#5cb85c] px-3 py-1 rounded-full cursor-pointer transition-all">{tag}</span>
             ))}
           </div>
