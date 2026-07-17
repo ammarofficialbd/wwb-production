@@ -1,0 +1,30 @@
+{
+  "id": 1,
+  "title": "Beyond the Hype: What Are AI ‘World Models’ and Why Should Your Business Care?",
+  "slug": "beyond-the-hype-what-are-ai-world-models-and-why-should-your-business-care",
+  "category_name": "Artificial Intelligence (AI)",
+  "category_slug": "artificial-intelligence-ai",
+  "author_name": "Ammar Junior",
+  "author_avatar": null,
+  "author_bio": null,
+  "metrics": {
+    "likes": "6425",
+    "views": "555645",
+    "comments": "546",
+    "readTime": "5554"
+  },
+  "intro": "The tech world moves fast. It feels like just yesterday we were all collectively losing our minds over Generative AI—using tools like ChatGPT to write emails or Midjourney to create stunning graphics. Then, the conversation shifted to Agentic AI, where systems don't just generate text but can actually plan and execute multi-step tasks.\n\nBut if you look at where the smart money is going right now, the spotlight has officially shifted to a massive new frontier: World Models and Spatial Intelligence.\n\nIn early 2026, AI pioneers like Fei-Fei Li (World Labs) and Yann LeCun (AMI Labs) collectively raised over $2 billion specifically to build these models. But what actually is a world model, how does it differ from the AI we use today, and—most importantly—what does it mean for the future of business? Let’s break it down.",
+  "content": [
+    {
+      "id": "section-c2f5499f-ce95-4b87-82ce-09b2b51f321f",
+      "body": "To understand a world model, it helps to look at what today’s AI cannot do.\n\nIf you ask a standard generative video AI to create a clip of a robot picking up a coffee cup, it will generate a visually convincing video. It looks real. But the AI doesn't actually understand physics. It doesn't know how heavy the cup is, how friction works, or what happens if the robot squeezes too hard. It only knows what a video of that action looks like.",
+      "extra": "",
+      "image": null,
+      "heading": "What Exactly is a World Model?"
+    }
+  ],
+  "published_at": "2026-07-16T06:14:03.479+00:00",
+  "updated_at": "2026-07-16T06:14:03.479+00:00",
+  "created_at": "2026-07-16T06:14:03.662142+00:00",
+  "main_image": null
+}
