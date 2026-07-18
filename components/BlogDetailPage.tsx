@@ -222,9 +222,9 @@ function TableOfContents({ items, activeId }: { items: { id: string; label: stri
 
 function VerticalAdBanner() {
   return (
-    <div>
+    <div className="h-[336px]">
       <span className="block text-[9px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Advertisement</span>
-      <div className="relative rounded-2xl p-5 flex flex-col gap-3 overflow-hidden" style={{ background: "linear-gradient(160deg,#1a4d2e,#2d6a4f,#40916c)" }}>
+      <div className="relative rounded-2xl p-5 flex flex-col gap-3 overflow-hidden h-full" style={{ background: "linear-gradient(160deg,#1a4d2e,#2d6a4f,#40916c)" }}>
         <span className="absolute top-2 right-3 text-[9px] font-bold text-white/70 bg-white/10 px-2 py-0.5 rounded">AD</span>
         <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-white/15"><TrendingUp size={24} className="text-white" /></div>
         <p className="text-[13px] font-bold text-white leading-snug">Grow your portfolio with AI-driven insights</p>

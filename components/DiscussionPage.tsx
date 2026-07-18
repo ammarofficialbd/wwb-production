@@ -4,43 +4,28 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Hash,
   Globe,
-  Lock,
   Plus,
-  Send,
   Users,
-  Bell,
   X,
   Check,
   ChevronDown,
   ChevronRight,
-  Search,
-  UserPlus,
   Settings,
-  LogOut,
   Smile,
   Loader2,
   MessageCircle,
-  Crown,
   Info,
   MoreHorizontal,
   AtSign,
   Zap,
   Paperclip,
   Mic,
-  Star,
-  Inbox,
-  FileText,
   Bookmark,
   Sparkles,
+  AlertCircle,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { createClient } from "@supabase/supabase-js";
-
-// ─── Supabase Realtime client (discussions project) ───────────────────────────
-const supabaseDiscussion = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
-);
+import EmojiPicker from "emoji-picker-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Channel {
@@ -60,6 +45,7 @@ interface Message {
   avatarId: number;
   content: string;
   createdAt: string;
+  _optimistic?: boolean; // local only flag
 }
 
 interface Member {
@@ -72,39 +58,17 @@ interface Member {
   joinedAt: string;
 }
 
-interface Invitation {
-  id: string;
-  channelId: string;
-  inviterId: string;
-  inviterUsername: string;
-  inviteeId: string;
-  status: string;
-  channel?: { name: string; description?: string };
-}
-
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 const avatarColors = [
   "#ff751f", "#0FDE75", "#6366f1", "#ec4899", "#14b8a6",
   "#f59e0b", "#3b82f6", "#8b5cf6", "#ef4444", "#10b981",
 ];
 
-function UserAvatar({ username, avatarId, size = 8, imgUrl }: { username: string; avatarId?: number; size?: number; imgUrl?: string }) {
+function UserAvatar({ username, avatarId, size = 8 }: { username: string; avatarId?: number; size?: number }) {
   const color = avatarColors[(avatarId || 0) % avatarColors.length];
-  
-  if (imgUrl) {
-    return (
-      <img 
-        src={imgUrl} 
-        alt={username} 
-        className={`w-${size} h-${size} rounded-full object-cover shrink-0`}
-        style={{ width: size * 4, height: size * 4 }}
-      />
-    );
-  }
-
   return (
     <div
-      className={`w-${size} h-${size} rounded-full flex items-center justify-center text-white font-bold shrink-0`}
+      className="rounded-full flex items-center justify-center text-white font-bold shrink-0"
       style={{ backgroundColor: color, width: size * 4, height: size * 4, fontSize: size * 1.5 }}
     >
       {username?.[0]?.toUpperCase() || "?"}
@@ -138,19 +102,33 @@ export default function DiscussionPage() {
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
-  const [globalMembers, setGlobalMembers] = useState<Member[]>([]);
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
-  
+
   const [messageInput, setMessageInput] = useState("");
   const [sendingMsg, setSendingMsg] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(true);
   const [favoritesOpen, setFavoritesOpen] = useState(true);
   const [activeRightTab, setActiveRightTab] = useState("Info");
 
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newChannelName, setNewChannelName] = useState("");
+  const [newChannelDesc, setNewChannelDesc] = useState("");
+  const [creatingChannel, setCreatingChannel] = useState(false);
+  
+  // Emoji Picker State
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const sseRef = useRef<EventSource | null>(null);
+  const activeChannelRef = useRef<Channel | null>(null);
+
+  // Keep ref in sync
+  useEffect(() => {
+    activeChannelRef.current = activeChannel;
+  }, [activeChannel]);
 
   // ── Scroll to bottom ────────────────────────────────────────────────────────
   const scrollToBottom = useCallback(() => {
@@ -163,50 +141,50 @@ export default function DiscussionPage() {
   const loadChannels = useCallback(async () => {
     if (!user) return;
     setChannelsLoading(true);
-    const res = await fetch("/api/discussion/channels");
-    if (res.ok) {
-      const data = await res.json();
-      setGlobalChannel(data.globalChannel);
-      setPrivateChannels(data.privateChannels || []);
-      setOwnedCount(data.ownedCount || 0);
-      if (!activeChannel && data.globalChannel) {
-        setActiveChannel(data.globalChannel);
+    try {
+      const res = await fetch("/api/discussion/channels");
+      if (res.ok) {
+        const data = await res.json();
+        const loadedGlobal =
+          data.globalChannel ||
+          ({ id: "global", name: "Global", type: "global", createdBy: "", createdAt: new Date().toISOString() } as Channel);
+        setGlobalChannel(loadedGlobal);
+        setPrivateChannels(data.privateChannels || []);
+        setOwnedCount(data.ownedCount || 0);
+        // Auto-select global on first load
+        if (!activeChannelRef.current) {
+          setActiveChannel(loadedGlobal);
+        }
       }
-    }
+    } catch {}
     setChannelsLoading(false);
-  }, [user, activeChannel]);
+  }, [user]);
 
   useEffect(() => { loadChannels(); }, [user]);
 
   // ── Load messages ────────────────────────────────────────────────────────────
   const loadMessages = useCallback(async (channelId: string) => {
     setMessagesLoading(true);
-    const res = await fetch(`/api/discussion/channels/${channelId}/messages`);
-    if (res.ok) {
-      const data = await res.json();
-      setMessages(data.messages || []);
-    }
+    try {
+      const res = await fetch(`/api/discussion/channels/${channelId}/messages`);
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(data.messages || []);
+      }
+    } catch {}
     setMessagesLoading(false);
   }, []);
 
   // ── Load members ────────────────────────────────────────────────────────────
   const loadMembers = useCallback(async (channelId: string) => {
-    const res = await fetch(`/api/discussion/channels/${channelId}/members`);
-    if (res.ok) {
-      const data = await res.json();
-      setMembers(data.members || []);
-    }
+    try {
+      const res = await fetch(`/api/discussion/channels/${channelId}/members`);
+      if (res.ok) {
+        const data = await res.json();
+        setMembers(data.members || []);
+      }
+    } catch {}
   }, []);
-
-  // ── Load global members for invite ──────────────────────────────────────────
-  const loadGlobalMembers = useCallback(async () => {
-    if (!globalChannel) return;
-    const res = await fetch(`/api/discussion/channels/${globalChannel.id}/members`);
-    if (res.ok) {
-      const data = await res.json();
-      setGlobalMembers(data.members || []);
-    }
-  }, [globalChannel]);
 
   useEffect(() => {
     if (activeChannel) {
@@ -215,31 +193,45 @@ export default function DiscussionPage() {
     }
   }, [activeChannel, loadMessages, loadMembers]);
 
-  // ── Real-time subscription ────────────────────────────────────────────────────
+  // ── SSE Real-time connection ──────────────────────────────────────────────────
   useEffect(() => {
     if (!activeChannel) return;
 
-    const channel = supabaseDiscussion
-      .channel(`messages:${activeChannel.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `channelId=eq.${activeChannel.id}`,
-        },
-        (payload) => {
+    // Close existing SSE
+    if (sseRef.current) {
+      sseRef.current.close();
+      sseRef.current = null;
+    }
+
+    const channelId = activeChannel.id;
+    const es = new EventSource(`/api/discussion/channels/${channelId}/stream`);
+    sseRef.current = es;
+
+    es.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === "message" && payload.message) {
+          const newMsg: Message = payload.message;
           setMessages((prev) => {
-            if (prev.some((m) => m.id === payload.new.id)) return prev;
-            return [...prev, payload.new as Message];
+            // Avoid duplicates
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
+            // Replace any matching optimistic message
+            const withoutOptimistic = prev.filter(
+              (m) => !(m._optimistic && m.content === newMsg.content && m.userId === newMsg.userId)
+            );
+            return [...withoutOptimistic, newMsg];
           });
         }
-      )
-      .subscribe();
+      } catch {}
+    };
+
+    es.onerror = () => {
+      // SSE will auto-reconnect; no action needed
+    };
 
     return () => {
-      supabaseDiscussion.removeChannel(channel);
+      es.close();
+      sseRef.current = null;
     };
   }, [activeChannel]);
 
@@ -248,22 +240,82 @@ export default function DiscussionPage() {
     setActiveChannel(channel);
     setMessages([]);
     setMembers([]);
+    setSendError(null);
+  };
+
+  // ── Create Channel ────────────────────────────────────────────────────────────
+  const handleCreateChannel = async () => {
+    if (!newChannelName.trim() || creatingChannel) return;
+    setCreatingChannel(true);
+    try {
+      const res = await fetch("/api/discussion/channels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newChannelName, description: newChannelDesc }),
+      });
+      const data = await res.json();
+      if (res.ok && data.channel) {
+        setIsCreateModalOpen(false);
+        setNewChannelName("");
+        setNewChannelDesc("");
+        await loadChannels();
+        switchChannel(data.channel);
+      } else {
+        alert(data.error || "Failed to create channel");
+      }
+    } catch {
+      alert("Network error creating channel");
+    } finally {
+      setCreatingChannel(false);
+    }
   };
 
   // ── Send message ──────────────────────────────────────────────────────────────
   const sendMessage = async () => {
     if (!messageInput.trim() || !activeChannel || sendingMsg) return;
-    setSendingMsg(true);
+
     const content = messageInput.trim();
+    setSendError(null);
     setMessageInput("");
 
-    await fetch(`/api/discussion/channels/${activeChannel.id}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
-    });
-    setSendingMsg(false);
-    inputRef.current?.focus();
+    // Optimistic: add message immediately
+    const optimisticId = `opt-${Date.now()}`;
+    const optimisticMsg: Message = {
+      id: optimisticId,
+      channelId: activeChannel.id,
+      userId: String(user!.id),
+      username: user!.username,
+      avatarId: user!.avatarId || 0,
+      content,
+      createdAt: new Date().toISOString(),
+      _optimistic: true,
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setSendingMsg(true);
+
+    try {
+      const res = await fetch(`/api/discussion/channels/${activeChannel.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        // Roll back optimistic message
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+        setMessageInput(content);
+        setSendError(data.error || "Failed to send message. Please try again.");
+      }
+      // If ok: SSE will replace the optimistic message with the real one
+    } catch {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+      setMessageInput(content);
+      setSendError("Network error. Please check your connection.");
+    } finally {
+      setSendingMsg(false);
+      inputRef.current?.focus();
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -288,41 +340,9 @@ export default function DiscussionPage() {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] min-h-[600px] w-full bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-200 text-[#191B1C] font-sans">
+
       {/* ── LEFT SIDEBAR ───────────────────────────────────────────────────────── */}
       <div className="w-64 shrink-0 flex flex-col bg-white border-r border-gray-100">
-        {/* Search */}
-        <div className="p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input 
-              type="text" 
-              placeholder="Search..." 
-              className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-[#0FDE75] transition-colors shadow-sm"
-            />
-          </div>
-        </div>
-
-        {/* Top Links */}
-        <div className="px-3 space-y-0.5">
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
-            <Sparkles size={16} />
-            Assistant <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-pink-100 text-pink-600">NEW</span>
-          </button>
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
-            <FileText size={16} /> Drafts
-          </button>
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
-            <Bookmark size={16} /> Saved items
-          </button>
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
-            <Inbox size={16} /> Inbox
-            <span className="ml-auto text-xs font-semibold text-gray-500">8</span>
-          </button>
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors">
-            <MessageCircle size={16} /> Direct messages
-            <span className="ml-auto text-xs font-semibold text-gray-500">1</span>
-          </button>
-        </div>
 
         {/* Favorites */}
         <div className="px-3 mt-6">
@@ -356,34 +376,45 @@ export default function DiscussionPage() {
             >
               <span className="text-xs font-semibold">Channels</span>
             </button>
-            <button className="text-gray-400 hover:text-gray-800"><Plus size={14}/></button>
+            <button
+              onClick={() => {
+                if (ownedCount >= 2) {
+                  alert("You can only create up to 2 private channels.");
+                } else {
+                  setIsCreateModalOpen(true);
+                }
+              }}
+              className="text-gray-400 hover:text-gray-800 transition-colors"
+              title="Create channel"
+            >
+              <Plus size={14} />
+            </button>
           </div>
 
           {channelsOpen && (
             <div className="space-y-0.5 mt-1">
-              {/* Global Channel */}
-              {globalChannel && (
-                <button
-                  onClick={() => switchChannel(globalChannel)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activeChannel?.id === globalChannel.id
-                      ? "bg-white shadow-sm text-gray-900"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  <Hash size={15} /> General
-                  <span className="ml-auto text-xs text-gray-400">1</span>
-                </button>
-              )}
-              
-              {/* Private Channels Loop */}
+              {/* Global Channel — always visible */}
+              <button
+                onClick={() => globalChannel && switchChannel(globalChannel)}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  activeChannel?.type === "global"
+                    ? "bg-gray-100 text-gray-900 shadow-sm"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                <Globe size={15} style={{ color: "#0FDE75" }} />
+                <span className="font-semibold">Global</span>
+                {channelsLoading && <Loader2 size={12} className="ml-auto animate-spin text-gray-400" />}
+              </button>
+
+              {/* Private Channels */}
               {privateChannels.map((ch) => (
                 <button
                   key={ch.id}
                   onClick={() => switchChannel(ch)}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                     activeChannel?.id === ch.id
-                      ? "bg-white shadow-sm text-gray-900"
+                      ? "bg-gray-100 text-gray-900 shadow-sm"
                       : "text-gray-600 hover:bg-gray-100"
                   }`}
                 >
@@ -393,50 +424,32 @@ export default function DiscussionPage() {
                   )}
                 </button>
               ))}
-              
-              {/* Mock sub-channels for visual parity with image */}
-              <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">
-                <Hash size={15} /> Website
-              </button>
-              <div className="ml-6 border-l border-gray-200 pl-2 mt-1 space-y-0.5">
-                <button className="w-full flex items-center gap-3 px-2 py-1.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">
-                  <span className="text-orange-500">💥</span> v3.0
-                </button>
-                <div className="ml-4 border-l border-gray-200 pl-2 space-y-0.5">
-                  <button className="w-full flex items-center gap-3 px-2 py-1.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 transition-colors">
-                    <span className="w-2 border-t border-gray-300"></span> Wireframe
-                  </button>
-                  <button className="w-full flex items-center gap-3 px-2 py-1.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 transition-colors">
-                    <span className="w-2 border-t border-gray-300"></span> Design
-                  </button>
-                  <button className="w-full flex items-center gap-3 px-2 py-1.5 rounded-lg text-sm font-medium bg-gray-200/50 text-gray-900 transition-colors">
-                    <span className="w-2 border-t border-gray-300"></span> UI-kit design
-                  </button>
-                </div>
-                <button className="w-full flex items-center gap-3 px-2 py-1.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 transition-colors">
-                  <Hash size={13} /> v2.0 - actual version
-                </button>
-              </div>
             </div>
           )}
         </div>
       </div>
 
       {/* ── MAIN CHAT ──────────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col bg-white border-r border-gray-100">
+      <div className="flex-1 flex flex-col bg-white border-r border-gray-100 min-w-0">
         {/* Channel header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-3">
             <h2 className="font-bold text-gray-800 flex items-center gap-2">
-              <Hash size={18} className="text-gray-400" />
-              {activeChannel?.name || "UI-kit design"}
-              <span className="text-gray-300 mx-1">/</span>
-              <span className="text-gray-500 text-sm font-medium flex items-center gap-1">
-                <Bookmark size={14} className="text-gray-400"/>
-              </span>
+              {activeChannel?.type === "global" ? (
+                <Globe size={18} style={{ color: "#0FDE75" }} />
+              ) : (
+                <Hash size={18} className="text-gray-400" />
+              )}
+              {activeChannel?.type === "global" ? "Global" : activeChannel?.name || "Select a channel"}
             </h2>
+            {activeChannel?.type === "global" && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: "rgba(15,222,117,0.15)", color: "#0abf62" }}>
+                Everyone
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-4 text-gray-400">
+            <span className="text-xs text-gray-400">{members.length > 0 ? `${members.length} members` : ""}</span>
             <button className="hover:text-gray-600"><Users size={18} /></button>
             <button className="hover:text-gray-600"><MoreHorizontal size={18} /></button>
             <button className="hover:text-gray-600"><Info size={18} /></button>
@@ -444,46 +457,86 @@ export default function DiscussionPage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full">
-          {messagesLoading ? (
+        <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full">
+          {!activeChannel ? (
+            <div className="flex flex-col items-center justify-center flex-1 py-16 text-center">
+              <Globe size={40} className="text-gray-200 mb-4" />
+              <p className="text-gray-400 text-sm">Select a channel to start chatting</p>
+            </div>
+          ) : messagesLoading ? (
             <div className="flex justify-center py-12">
               <Loader2 size={24} className="animate-spin text-gray-300" />
             </div>
           ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center flex-1 py-16 text-center">
               <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-gray-50 border border-gray-100">
-                <Hash size={28} className="text-gray-300" />
+                {activeChannel.type === "global" ? (
+                  <Globe size={28} style={{ color: "#0FDE75" }} />
+                ) : (
+                  <Hash size={28} className="text-gray-300" />
+                )}
               </div>
               <p className="font-bold text-gray-800 text-lg mb-1">
-                Welcome to #{activeChannel?.name || "General"}!
+                Welcome to {activeChannel.type === "global" ? "Global" : `#${activeChannel.name}`}!
               </p>
               <p className="text-gray-500 text-sm max-w-xs">
-                This is the beginning of the discussion. Start chatting below!
+                {activeChannel.type === "global"
+                  ? "This is the global discussion space. Everyone can chat here!"
+                  : "This is the beginning of the channel. Start the conversation!"}
               </p>
             </div>
           ) : (
             <>
               {messages.map((msg, idx) => {
                 const prevMsg = idx > 0 ? messages[idx - 1] : null;
-                const showHeader = !prevMsg || prevMsg.userId !== msg.userId ||
+                const isOwn = String(user?.id) === msg.userId;
+                const showHeader =
+                  !prevMsg ||
+                  prevMsg.userId !== msg.userId ||
                   new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime() > 5 * 60000;
 
+                const highlightBusinessWords = (text: string) => {
+                  const keywords = ["business", "finance", "money", "tax", "income", "stock", "company", "investment", "profit", "revenue", "market", "trade", "startup", "bank", "corporate", "economy"];
+                  const regex = new RegExp(`\\b(${keywords.join("|")})\\b`, "gi");
+                  const parts = text.split(regex);
+                  return parts.map((part, i) => {
+                    if (keywords.some((k) => k.toLowerCase() === part.toLowerCase())) {
+                      return (
+                        <span
+                          key={i}
+                          className="font-bold px-1.5 py-0.5 rounded mx-0.5 inline-block"
+                          style={{ background: "rgba(15,222,117,0.15)", color: "#0abf62" }}
+                        >
+                          {part}
+                        </span>
+                      );
+                    }
+                    return part;
+                  });
+                };
+
                 return (
-                  <div key={msg.id} className={`flex gap-4 group ${!showHeader ? "-mt-4" : ""}`}>
+                  <div
+                    key={msg.id}
+                    className={`flex gap-3 group ${!showHeader ? "-mt-2" : ""} ${msg._optimistic ? "opacity-60" : ""} ${isOwn ? "flex-row-reverse" : ""}`}
+                  >
                     {showHeader ? (
                       <UserAvatar username={msg.username} avatarId={msg.avatarId} size={10} />
                     ) : (
-                      <div className="w-10 shrink-0" />
+                      <div className="shrink-0" style={{ width: 40 }} />
                     )}
-                    <div className="flex-1">
+                    <div className={`flex-1 min-w-0 flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
                       {showHeader && (
-                        <div className="flex items-baseline gap-2 mb-1">
+                        <div className={`flex items-baseline gap-2 mb-1 ${isOwn ? "flex-row-reverse" : ""}`}>
                           <span className="font-bold text-gray-900 text-sm">{msg.username}</span>
                           <span className="text-xs text-gray-400">{formatTime(msg.createdAt)}</span>
+                          {msg._optimistic && (
+                            <span className="text-xs text-gray-400 italic">sending...</span>
+                          )}
                         </div>
                       )}
-                      <div className="text-gray-700 text-[15px] leading-relaxed">
-                        {msg.content}
+                      <div className={`text-[15px] leading-relaxed break-words text-gray-700 max-w-[85%] ${isOwn ? "text-right" : "text-left"}`}>
+                        {highlightBusinessWords(msg.content)}
                       </div>
                     </div>
                   </div>
@@ -495,39 +548,78 @@ export default function DiscussionPage() {
         </div>
 
         {/* Message input */}
-        <div className="px-6 py-4 pb-6 bg-white">
-          <div className="flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm focus-within:border-[#0FDE75] transition-colors overflow-hidden">
+        <div className="px-6 py-4 pb-6 bg-white shrink-0">
+          {sendError && (
+            <div className="mb-2 flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              <AlertCircle size={14} />
+              {sendError}
+              <button onClick={() => setSendError(null)} className="ml-auto text-red-400 hover:text-red-600">
+                <X size={12} />
+              </button>
+            </div>
+          )}
+          <div className={`flex flex-col bg-white rounded-xl border shadow-sm transition-colors overflow-hidden ${sendError ? "border-red-200" : "border-gray-200 focus-within:border-[#0FDE75]"}`}>
             <textarea
               ref={inputRef}
               rows={2}
-              className="w-full bg-transparent text-[15px] text-gray-800 placeholder-gray-400 outline-none resize-none p-4 min-h-[80px]"
-              placeholder={`Message #${activeChannel?.name || "General"}...`}
+              disabled={!activeChannel}
+              className="w-full bg-transparent text-[15px] text-gray-800 placeholder-gray-400 outline-none resize-none p-4 min-h-[80px] disabled:cursor-not-allowed"
+              placeholder={
+                activeChannel
+                  ? `Message ${activeChannel.type === "global" ? "Global" : `#${activeChannel.name}`}... (Enter to send)`
+                  : "Select a channel to start chatting"
+              }
               value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
+              onChange={(e) => { setMessageInput(e.target.value); setSendError(null); }}
               onKeyDown={handleKeyDown}
             />
             <div className="flex items-center justify-between px-3 py-2 bg-gray-50/50 border-t border-gray-100">
               <div className="flex items-center gap-1">
                 <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><AtSign size={18} /></button>
                 <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><Zap size={18} /></button>
-                <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><Smile size={18} /></button>
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    className={`p-2 rounded-lg transition-colors ${showEmojiPicker ? "text-gray-600 bg-gray-100" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"}`}
+                  >
+                    <Smile size={18} />
+                  </button>
+                  {showEmojiPicker && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-40" 
+                        onClick={() => setShowEmojiPicker(false)}
+                      />
+                      <div className="absolute bottom-full left-0 mb-2 z-50 shadow-2xl rounded-xl overflow-hidden" style={{ minWidth: 320 }}>
+                        <EmojiPicker 
+                          onEmojiClick={(emojiData) => {
+                            setMessageInput(prev => prev + emojiData.emoji);
+                            inputRef.current?.focus();
+                          }}
+                          width={320}
+                          height={400}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
                 <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><Paperclip size={18} /></button>
                 <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><Mic size={18} /></button>
               </div>
               <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => setMessageInput("")}
+                <button
+                  onClick={() => { setMessageInput(""); setSendError(null); }}
                   className="px-4 py-1.5 text-sm font-semibold text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
                 >
                   Discard
                 </button>
                 <button
                   onClick={sendMessage}
-                  disabled={!messageInput.trim() || sendingMsg}
-                  className="px-5 py-1.5 text-sm font-semibold text-gray-900 rounded-lg transition-all disabled:opacity-50 shadow-sm"
+                  disabled={!messageInput.trim() || sendingMsg || !activeChannel}
+                  className="px-5 py-1.5 text-sm font-semibold text-gray-900 rounded-lg transition-all disabled:opacity-40 shadow-sm flex items-center gap-2"
                   style={{ background: "#0FDE75" }}
                 >
-                  {sendingMsg ? <Loader2 size={16} className="animate-spin inline" /> : "Send"}
+                  {sendingMsg ? <Loader2 size={16} className="animate-spin" /> : "Send"}
                 </button>
               </div>
             </div>
@@ -539,7 +631,7 @@ export default function DiscussionPage() {
       <div className="hidden xl:flex flex-col w-80 shrink-0 bg-white">
         {/* Tabs */}
         <div className="flex items-center gap-6 px-6 pt-4 border-b border-gray-100">
-          {["Info", "Pins", "Files", "Links"].map((tab) => (
+          {["Info", "Members"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveRightTab(tab)}
@@ -556,109 +648,120 @@ export default function DiscussionPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8 [&::-webkit-scrollbar]:hidden">
-          {/* Main Info */}
-          <div>
-            <h3 className="font-bold text-gray-900 text-[15px] mb-4">Main info</h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500 flex items-center gap-2"><UserAvatar username="Creator" size={4}/> Creator</span>
-                <span className="font-medium text-gray-900 flex items-center gap-2">
-                  <UserAvatar username="Andrew M." size={5}/> Andrew M.
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500 flex items-center gap-2"><Settings size={14}/> Date of creation</span>
-                <span className="font-medium text-gray-900">
-                  {activeChannel ? formatDate(activeChannel.createdAt) : "28 May"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500 flex items-center gap-2"><Sparkles size={14}/> Status</span>
-                <span className="px-2 py-0.5 rounded text-xs font-semibold" style={{ background: "rgba(15,222,117,0.15)", color: "#0abf62" }}>
-                  • Active
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500 flex items-center gap-2"><Hash size={14}/> Tags</span>
-                <span className="font-medium text-gray-400 flex items-center gap-1">13 <ChevronRight size={14}/></span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500 flex items-center gap-2"><Check size={14}/> Tasks</span>
-                <span className="font-medium text-gray-400 flex items-center gap-1">4 <ChevronRight size={14}/></span>
-              </div>
-            </div>
-          </div>
-
-          {/* Linked threads */}
-          <div>
-            <h3 className="font-bold text-gray-900 text-[15px] mb-3">Linked threads</h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500 flex items-center gap-2"><Hash size={14}/> Front-end</span>
-                <span className="bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded font-medium">4</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500 flex items-center gap-2"><Hash size={14}/> UI-kit design standards</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Thread activity */}
-          <div>
-            <h3 className="font-bold text-gray-900 text-[15px] mb-3">Thread activity</h3>
-            <div className="flex gap-1">
-              {[...Array(15)].map((_, i) => (
-                <div key={i} className="flex-1 h-2 rounded-sm" style={{ background: i < 8 ? "#0FDE75" : "rgba(15,222,117,0.2)", opacity: i > 10 ? 0.3 : 1 }} />
-              ))}
-            </div>
-          </div>
-
-          {/* Members */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-gray-900 text-[15px]">Members <span className="text-gray-400 font-normal">{members.length || 9}</span></h3>
-              <div className="flex gap-2 text-gray-400">
-                <button className="hover:text-gray-600"><Plus size={16}/></button>
-                <button className="hover:text-gray-600"><Settings size={16}/></button>
-              </div>
-            </div>
-            
-            <div className="space-y-4">
-              {members.length > 0 ? members.map(m => (
-                <div key={m.id} className="flex items-center gap-3">
-                  <UserAvatar username={m.username} avatarId={m.avatarId} size={8}/>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-gray-900">{m.username}</p>
-                    <p className="text-xs text-gray-400 capitalize">{m.role}</p>
+          {activeRightTab === "Info" && (
+            <>
+              {/* Main Info */}
+              <div>
+                <h3 className="font-bold text-gray-900 text-[15px] mb-4">Channel Info</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Type</span>
+                    <span className="font-medium text-gray-900 capitalize">
+                      {activeChannel?.type || "—"}
+                    </span>
                   </div>
-                  {m.role === "admin" && (
-                     <span className="text-[10px] font-bold px-2 py-0.5 rounded text-gray-600 bg-gray-100">Admin</span>
-                  )}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Created</span>
+                    <span className="font-medium text-gray-900">
+                      {activeChannel ? formatDate(activeChannel.createdAt) : "—"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Status</span>
+                    <span className="px-2 py-0.5 rounded text-xs font-semibold" style={{ background: "rgba(15,222,117,0.15)", color: "#0abf62" }}>
+                      • Active
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Messages</span>
+                    <span className="font-medium text-gray-900">{messages.filter(m => !m._optimistic).length}</span>
+                  </div>
                 </div>
-              )) : (
-                <>
-                  <div className="flex items-center gap-3">
-                    <UserAvatar username="Daniel" size={8}/>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-gray-900">Daniel Anderson</p>
-                      <p className="text-xs text-gray-400">Art director</p>
+              </div>
+
+              {/* Live indicator */}
+              <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "rgba(15,222,117,0.08)" }}>
+                <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: "#0FDE75" }} />
+                <span className="text-sm font-medium text-gray-700">Live discussion active</span>
+              </div>
+            </>
+          )}
+
+          {activeRightTab === "Members" && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-gray-900 text-[15px]">
+                  Members <span className="text-gray-400 font-normal">{members.length}</span>
+                </h3>
+              </div>
+              <div className="space-y-4">
+                {members.length > 0 ? members.map((m) => (
+                  <div key={m.id} className="flex items-center gap-3">
+                    <UserAvatar username={m.username} avatarId={m.avatarId} size={8} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{m.username}</p>
+                      <p className="text-xs text-gray-400 capitalize">{m.role}</p>
                     </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded text-green-700 bg-green-100">Design</span>
+                    {m.role === "admin" && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded text-gray-600 bg-gray-100">Admin</span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-3">
-                    <UserAvatar username="Andrew" size={8}/>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-gray-900">Andrew Miller</p>
-                      <p className="text-xs text-gray-400">Product owner</p>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded text-orange-700 bg-orange-100">Management</span>
-                  </div>
-                </>
-              )}
+                )) : (
+                  <p className="text-sm text-gray-400 text-center py-4">No members to show</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── CREATE CHANNEL MODAL ───────────────────────────────────────────────── */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-2xl w-full max-w-sm shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Create Channel</h2>
+              <button onClick={() => setIsCreateModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="mb-3 text-xs text-gray-500 bg-gray-50 rounded-lg p-2">
+              You can create up to <strong>2 private channels</strong>. ({ownedCount}/2 used)
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Channel Name</label>
+                <input
+                  type="text"
+                  value={newChannelName}
+                  onChange={(e) => setNewChannelName(e.target.value)}
+                  placeholder="e.g. Marketing"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0FDE75]"
+                  onKeyDown={(e) => e.key === "Enter" && handleCreateChannel()}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
+                <input
+                  type="text"
+                  value={newChannelDesc}
+                  onChange={(e) => setNewChannelDesc(e.target.value)}
+                  placeholder="What's this channel about?"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0FDE75]"
+                />
+              </div>
+              <button
+                onClick={handleCreateChannel}
+                disabled={creatingChannel || !newChannelName.trim()}
+                className="w-full py-2 rounded-lg font-semibold text-gray-900 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                style={{ background: "#0FDE75" }}
+              >
+                {creatingChannel ? <Loader2 size={16} className="animate-spin" /> : "Create Channel"}
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

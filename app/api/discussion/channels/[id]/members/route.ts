@@ -2,6 +2,19 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { supabaseDiscussion } from '@/lib/supabase'
 
+function toCamelMember(mem: any) {
+  if (!mem) return mem;
+  return {
+    id: mem.id,
+    channelId: mem.channel_id,
+    userId: mem.user_id,
+    username: mem.username,
+    avatarId: mem.avatar_id,
+    role: mem.role,
+    joinedAt: mem.joined_at,
+  }
+}
+
 // GET /api/discussion/channels/[id]/members
 export async function GET(
   request: Request,
@@ -17,14 +30,14 @@ export async function GET(
   const { data: members } = await supabaseDiscussion
     .from('channel_members')
     .select('*')
-    .eq('channelId', channelId)
-    .order('joinedAt', { ascending: true })
+    .eq('channel_id', channelId)
+    .order('joined_at', { ascending: true })
 
-  return NextResponse.json({ members: members || [] })
+  return NextResponse.json({ members: (members || []).map(toCamelMember) })
 }
 
-// POST /api/discussion/channels/[id]/members — add a member
-export async function POST(
+// DELETE /api/discussion/channels/[id]/members (Leave or kick)
+export async function DELETE(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
@@ -34,49 +47,17 @@ export async function POST(
   }
 
   const { id: channelId } = await context.params
-  const { userId, username, avatarId } = await request.json()
-
-  // Verify requester is admin of channel
-  const { data: requesterMembership } = await supabaseDiscussion
+  
+  // For now, only support leaving the channel (delete own membership)
+  const { error } = await supabaseDiscussion
     .from('channel_members')
-    .select('role')
-    .eq('channelId', channelId)
-    .eq('userId', session.userId)
-    .single()
-
-  if (!requesterMembership || requesterMembership.role !== 'admin') {
-    return NextResponse.json({ error: 'Only channel admins can add members' }, { status: 403 })
-  }
-
-  // Check member count limit (10 for free users)
-  const { data: existingMembers } = await supabaseDiscussion
-    .from('channel_members')
-    .select('id')
-    .eq('channelId', channelId)
-
-  if ((existingMembers || []).length >= 10) {
-    return NextResponse.json({ error: 'Free channels are limited to 10 members' }, { status: 403 })
-  }
-
-  // Add member
-  const { data: member, error } = await supabaseDiscussion
-    .from('channel_members')
-    .insert({
-      channelId,
-      userId,
-      username,
-      avatarId: avatarId || 0,
-      role: 'member'
-    })
-    .select()
-    .single()
+    .delete()
+    .eq('channel_id', channelId)
+    .eq('user_id', String(session.userId))
 
   if (error) {
-    if (error.code === '23505') {
-      return NextResponse.json({ error: 'User is already a member' }, { status: 409 })
-    }
-    return NextResponse.json({ error: 'Failed to add member' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to leave channel' }, { status: 500 })
   }
 
-  return NextResponse.json({ member })
+  return NextResponse.json({ success: true })
 }

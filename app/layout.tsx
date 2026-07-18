@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SkillUp Dashboard",
-  description: "Learning dashboard for SkillUp",
+  title: "WWB - World Wide Business",
+  description:
+    "Join WWB, the global business community connecting entrepreneurs, companies, professionals, startups, and investors to network, collaborate, and grow worldwide.",
 };
 
 import { AuthProvider } from "@/context/AuthContext";

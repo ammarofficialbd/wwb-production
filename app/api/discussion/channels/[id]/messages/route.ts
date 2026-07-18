@@ -2,6 +2,19 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { supabaseDiscussion } from '@/lib/supabase'
 
+function toCamelMessage(msg: any) {
+  if (!msg) return msg;
+  return {
+    id: msg.id,
+    channelId: msg.channel_id,
+    userId: msg.user_id,
+    username: msg.username,
+    avatarId: msg.avatar_id,
+    content: msg.content,
+    createdAt: msg.created_at,
+  }
+}
+
 // GET /api/discussion/channels/[id]/messages
 export async function GET(
   request: Request,
@@ -29,8 +42,8 @@ export async function GET(
     const { data: membership } = await supabaseDiscussion
       .from('channel_members')
       .select('id')
-      .eq('channelId', channelId)
-      .eq('userId', session.userId)
+      .eq('channel_id', channelId)
+      .eq('user_id', String(session.userId))
       .single()
 
     if (!membership) {
@@ -41,11 +54,11 @@ export async function GET(
   const { data: messages } = await supabaseDiscussion
     .from('messages')
     .select('*')
-    .eq('channelId', channelId)
-    .order('createdAt', { ascending: true })
+    .eq('channel_id', channelId)
+    .order('created_at', { ascending: true })
     .limit(100)
 
-  return NextResponse.json({ messages: messages || [] })
+  return NextResponse.json({ messages: (messages || []).map(toCamelMessage) })
 }
 
 // POST /api/discussion/channels/[id]/messages
@@ -80,8 +93,8 @@ export async function POST(
     const { data: membership } = await supabaseDiscussion
       .from('channel_members')
       .select('id')
-      .eq('channelId', channelId)
-      .eq('userId', session.userId)
+      .eq('channel_id', channelId)
+      .eq('user_id', String(session.userId))
       .single()
 
     if (!membership) {
@@ -92,10 +105,10 @@ export async function POST(
   const { data: message, error } = await supabaseDiscussion
     .from('messages')
     .insert({
-      channelId,
-      userId: session.userId,
+      channel_id: channelId,
+      user_id: String(session.userId),
       username: session.username,
-      avatarId: session.avatarId || 0,
+      avatar_id: session.avatarId || 0,
       content: content.trim()
     })
     .select()
@@ -106,5 +119,5 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to send message', details: error }, { status: 500 })
   }
 
-  return NextResponse.json({ message })
+  return NextResponse.json({ message: toCamelMessage(message) })
 }

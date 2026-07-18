@@ -121,7 +121,7 @@ export default function Sidebar({ activePage = "Dashboard", onNavigate, isCollap
 
       {/* Ads section */}
       <div className={`mt-6 mb-4 w-full transition-all duration-300 ease-in-out ${isCollapsed ? "opacity-0 h-0 hidden" : "opacity-100 flex-1"}`}>
-        <div className="rounded-xl overflow-hidden shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow relative h-[240px] w-full">
+        <div className="rounded-xl overflow-hidden shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow relative h-[336px] w-full">
           <img src="/ads1.png" alt="Google Ads" className="w-full h-full object-cover" />
         </div>
       </div>
