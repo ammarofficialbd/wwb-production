@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   Hash,
   Globe,
@@ -108,6 +109,7 @@ export default function DiscussionPage() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [membersLoading, setMembersLoading] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(true);
   const [favoritesOpen, setFavoritesOpen] = useState(true);
   const [activeRightTab, setActiveRightTab] = useState("Info");
@@ -119,6 +121,11 @@ export default function DiscussionPage() {
   
   // Emoji Picker State
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [emojiPickerPos, setEmojiPickerPos] = useState({ top: 0, left: 0 });
+  const emojiButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Mobile sidebar state
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -177,6 +184,7 @@ export default function DiscussionPage() {
 
   // ── Load members ────────────────────────────────────────────────────────────
   const loadMembers = useCallback(async (channelId: string) => {
+    setMembersLoading(true);
     try {
       const res = await fetch(`/api/discussion/channels/${channelId}/members`);
       if (res.ok) {
@@ -184,6 +192,7 @@ export default function DiscussionPage() {
         setMembers(data.members || []);
       }
     } catch {}
+    setMembersLoading(false);
   }, []);
 
   useEffect(() => {
@@ -338,11 +347,38 @@ export default function DiscussionPage() {
     );
   }
 
+  // Calculate emoji picker position from button
+  const openEmojiPicker = () => {
+    if (emojiButtonRef.current) {
+      const rect = emojiButtonRef.current.getBoundingClientRect();
+      setEmojiPickerPos({
+        top: rect.top - 410,
+        left: Math.min(rect.left, window.innerWidth - 330),
+      });
+    }
+    setShowEmojiPicker((prev) => !prev);
+  };
+
   return (
-    <div className="flex h-[calc(100vh-8rem)] min-h-[600px] w-full bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-200 text-[#191B1C] font-sans">
+    <div className="flex h-[calc(100vh-8rem)] min-h-0 w-full bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-200 text-[#191B1C] font-sans relative">
+
+      {/* ── MOBILE OVERLAY ─────────────────────────────────────────────────────── */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-30 md:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
 
       {/* ── LEFT SIDEBAR ───────────────────────────────────────────────────────── */}
-      <div className="w-64 shrink-0 flex flex-col bg-white border-r border-gray-100">
+      <div
+        className={`
+          fixed md:relative top-0 left-0 h-full z-40 md:z-auto
+          w-72 md:w-64 shrink-0 flex flex-col bg-white border-r border-gray-100
+          transition-transform duration-300 ease-in-out
+          ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+        `}
+      >
 
         {/* Favorites */}
         <div className="px-3 mt-6">
@@ -393,47 +429,78 @@ export default function DiscussionPage() {
 
           {channelsOpen && (
             <div className="space-y-0.5 mt-1">
-              {/* Global Channel — always visible */}
-              <button
-                onClick={() => globalChannel && switchChannel(globalChannel)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  activeChannel?.type === "global"
-                    ? "bg-gray-100 text-gray-900 shadow-sm"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                <Globe size={15} style={{ color: "#0FDE75" }} />
-                <span className="font-semibold">Global</span>
-                {channelsLoading && <Loader2 size={12} className="ml-auto animate-spin text-gray-400" />}
-              </button>
+              {channelsLoading ? (
+                <div className="px-3 py-2 flex flex-col gap-2.5 animate-pulse">
+                  {[0, 1, 2].map((i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="w-[15px] h-[15px] rounded shimmer" />
+                  <div className="h-3 rounded shimmer" style={{ width: `${70 - i * 15}%` }} />
+                </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  {/* Global Channel — always visible */}
+                  <button
+                    onClick={() => switchChannel(globalChannel || { id: "global", name: "Global", type: "global", createdBy: "", createdAt: new Date().toISOString() })}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      activeChannel?.type === "global"
+                        ? "bg-gray-100 text-gray-900 shadow-sm"
+                        : "text-gray-600 hover:bg-gray-100"
+                    }`}
+                  >
+                    <Globe size={15} style={{ color: "#0FDE75" }} />
+                    <span className="font-semibold">Global</span>
+                  </button>
 
-              {/* Private Channels */}
-              {privateChannels.map((ch) => (
-                <button
-                  key={ch.id}
-                  onClick={() => switchChannel(ch)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activeChannel?.id === ch.id
-                      ? "bg-gray-100 text-gray-900 shadow-sm"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  <Hash size={15} /> {ch.name}
-                  {activeChannel?.id === ch.id && (
-                    <div className="ml-auto w-1.5 h-1.5 rounded-full" style={{ background: "#0FDE75" }} />
-                  )}
-                </button>
-              ))}
+                  {/* Private Channels */}
+                  {privateChannels.map((ch) => (
+                    <button
+                      key={ch.id}
+                      onClick={() => switchChannel(ch)}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        activeChannel?.id === ch.id
+                          ? "bg-gray-100 text-gray-900 shadow-sm"
+                          : "text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      <Hash size={15} /> {ch.name}
+                      {activeChannel?.id === ch.id && (
+                        <div className="ml-auto w-1.5 h-1.5 rounded-full" style={{ background: "#0FDE75" }} />
+                      )}
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           )}
         </div>
+        {/* Close button (mobile only) */}
+        <button
+          onClick={() => setMobileSidebarOpen(false)}
+          className="md:hidden absolute top-4 right-4 p-1 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       {/* ── MAIN CHAT ──────────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col bg-white border-r border-gray-100 min-w-0">
+      <div className="flex-1 flex flex-col bg-white border-r border-gray-100 min-w-0 overflow-hidden">
         {/* Channel header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+        <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-3">
+            {/* Hamburger menu (mobile) */}
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              className="md:hidden p-1.5 -ml-1 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Open channels"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
             <h2 className="font-bold text-gray-800 flex items-center gap-2">
               {activeChannel?.type === "global" ? (
                 <Globe size={18} style={{ color: "#0FDE75" }} />
@@ -448,8 +515,8 @@ export default function DiscussionPage() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-4 text-gray-400">
-            <span className="text-xs text-gray-400">{members.length > 0 ? `${members.length} members` : ""}</span>
+          <div className="flex items-center gap-2 md:gap-4 text-gray-400">
+            <span className="hidden sm:inline text-xs text-gray-400">{members.length > 0 ? `${members.length} members` : ""}</span>
             <button className="hover:text-gray-600"><Users size={18} /></button>
             <button className="hover:text-gray-600"><MoreHorizontal size={18} /></button>
             <button className="hover:text-gray-600"><Info size={18} /></button>
@@ -464,8 +531,20 @@ export default function DiscussionPage() {
               <p className="text-gray-400 text-sm">Select a channel to start chatting</p>
             </div>
           ) : messagesLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 size={24} className="animate-spin text-gray-300" />
+            <div className="flex flex-col gap-5">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex gap-3">
+                  <div className="w-10 h-10 rounded-full shimmer shrink-0" />
+                  <div className="flex-1 min-w-0 flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-24 rounded shimmer" />
+                      <div className="h-2.5 w-12 rounded shimmer" />
+                    </div>
+                    <div className="h-3.5 rounded shimmer" style={{ width: `${85 - (i % 3) * 18}%` }} />
+                    {i % 2 === 0 && <div className="h-3.5 rounded shimmer" style={{ width: `${55 - (i % 2) * 10}%` }} />}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center flex-1 py-16 text-center">
@@ -548,7 +627,7 @@ export default function DiscussionPage() {
         </div>
 
         {/* Message input */}
-        <div className="px-6 py-4 pb-6 bg-white shrink-0">
+        <div className="px-3 md:px-6 py-4 pb-4 md:pb-6 bg-white shrink-0">
           {sendError && (
             <div className="mb-2 flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
               <AlertCircle size={14} />
@@ -577,32 +656,13 @@ export default function DiscussionPage() {
               <div className="flex items-center gap-1">
                 <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><AtSign size={18} /></button>
                 <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><Zap size={18} /></button>
-                <div className="relative">
-                  <button 
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className={`p-2 rounded-lg transition-colors ${showEmojiPicker ? "text-gray-600 bg-gray-100" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"}`}
-                  >
-                    <Smile size={18} />
-                  </button>
-                  {showEmojiPicker && (
-                    <>
-                      <div 
-                        className="fixed inset-0 z-40" 
-                        onClick={() => setShowEmojiPicker(false)}
-                      />
-                      <div className="absolute bottom-full left-0 mb-2 z-50 shadow-2xl rounded-xl overflow-hidden" style={{ minWidth: 320 }}>
-                        <EmojiPicker 
-                          onEmojiClick={(emojiData) => {
-                            setMessageInput(prev => prev + emojiData.emoji);
-                            inputRef.current?.focus();
-                          }}
-                          width={320}
-                          height={400}
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
+                <button
+                  ref={emojiButtonRef}
+                  onClick={openEmojiPicker}
+                  className={`p-2 rounded-lg transition-colors ${showEmojiPicker ? "text-gray-600 bg-gray-100" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"}`}
+                >
+                  <Smile size={18} />
+                </button>
                 <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><Paperclip size={18} /></button>
                 <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><Mic size={18} /></button>
               </div>
@@ -626,6 +686,35 @@ export default function DiscussionPage() {
           </div>
         </div>
       </div>
+
+      {/* ── EMOJI PICKER PORTAL ────────────────────────────────────────────────── */}
+      {showEmojiPicker && typeof window !== "undefined" && createPortal(
+        <>
+          <div
+            className="fixed inset-0 z-[9998]"
+            onClick={() => setShowEmojiPicker(false)}
+          />
+          <div
+            className="fixed z-[9999] shadow-2xl rounded-xl overflow-hidden"
+            style={{
+              top: emojiPickerPos.top,
+              left: emojiPickerPos.left,
+              width: 320,
+            }}
+          >
+            <EmojiPicker
+              onEmojiClick={(emojiData) => {
+                setMessageInput((prev) => prev + emojiData.emoji);
+                setShowEmojiPicker(false);
+                inputRef.current?.focus();
+              }}
+              width={320}
+              height={400}
+            />
+          </div>
+        </>,
+        document.body
+      )}
 
       {/* ── RIGHT PANEL (Info) ─────────────────────────────────────────────────── */}
       <div className="hidden xl:flex flex-col w-80 shrink-0 bg-white">
@@ -695,7 +784,20 @@ export default function DiscussionPage() {
                 </h3>
               </div>
               <div className="space-y-4">
-                {members.length > 0 ? members.map((m) => (
+                {membersLoading ? (
+                  <div className="flex flex-col gap-4 animate-pulse">
+                    {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full shimmer shrink-0" />
+                      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                        <div className="h-3 rounded shimmer" style={{ width: `${60 - i * 8}%` }} />
+                        <div className="h-2.5 rounded shimmer w-16" />
+                      </div>
+                    </div>
+                    ))}
+                  </div>
+                ) : members.length > 0 ? (
+                  members.map((m) => (
                   <div key={m.id} className="flex items-center gap-3">
                     <UserAvatar username={m.username} avatarId={m.avatarId} size={8} />
                     <div className="flex-1 min-w-0">
@@ -706,7 +808,8 @@ export default function DiscussionPage() {
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded text-gray-600 bg-gray-100">Admin</span>
                     )}
                   </div>
-                )) : (
+                  ))
+                ) : (
                   <p className="text-sm text-gray-400 text-center py-4">No members to show</p>
                 )}
               </div>

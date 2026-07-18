@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import { supabaseMain } from '@/lib/supabase'
 import { createSession } from '@/lib/session'
+import bcrypt from 'bcryptjs'
 
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { username, role, avatarId } = body
+    const { username, password, role, avatarId } = body
 
-    if (!username || !role) {
+    if (!username || !password || !role) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
@@ -26,12 +27,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Username already taken' }, { status: 409 })
     }
 
+    const salt = await bcrypt.genSalt(10)
+    const passwordHash = await bcrypt.hash(password, salt)
+
     // Create user (seller gets 1000 credits automatically)
     const credits = role === 'seller' ? 1000 : 0
     const { data: user, error: createError } = await supabaseMain
       .from('users')
       .insert({
         username,
+        passwordHash,
         role,
         avatarId: avatarId || 0,
         credits
