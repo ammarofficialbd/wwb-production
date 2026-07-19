@@ -140,12 +140,11 @@ export default function TrendingPostsSlider() {
       className="relative w-full rounded-[24px] overflow-hidden select-none"
       style={{ minHeight: "130px" }}
       onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
+      onMouseLeave={(e) => { onDragEnd(); setIsPaused(false); }}
       // Mouse drag
       onMouseDown={(e) => onDragStart(e.clientX)}
       onMouseMove={(e) => onDragMove(e.clientX)}
       onMouseUp={onDragEnd}
-      onMouseLeave={(e) => { onDragEnd(); setIsPaused(false); }}
       // Touch drag
       onTouchStart={(e) => onDragStart(e.touches[0].clientX)}
       onTouchMove={(e) => onDragMove(e.touches[0].clientX)}
