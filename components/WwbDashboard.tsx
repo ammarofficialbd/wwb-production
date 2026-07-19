@@ -2,11 +2,11 @@
 
 import PostCardsWidget from "./dashboard/PostCardsWidget";
 import FinancialStatsWidget from "./dashboard/FinancialStatsWidget";
-import MonthlySpendingLimit from "./dashboard/MonthlySpendingLimit";
+import TrendingPostsSlider from "./dashboard/TrendingPostsSlider";
 import OptimizeBudgetTips from "./dashboard/OptimizeBudgetTips";
 import CategoryPostsSection from "./dashboard/CategoryPostsSection";
 import MyCardWidget from "./dashboard/MyCardWidget";
-import TransactionHistory from "./dashboard/TransactionHistory";
+import PopularPosts from "./dashboard/PopularPosts";
 
 interface WwbDashboardProps {
   userRole: "seller" | "buyer";
@@ -29,10 +29,17 @@ export default function WwbDashboard({ userRole }: WwbDashboardProps) {
           </div>
         </div>
 
-        {/* Row 2: Monthly spending limit & Optimize budget tips */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <MonthlySpendingLimit />
-          <OptimizeBudgetTips />
+        {/* Row 2: Trending posts slider (40%) & Ad (60%) */}
+        <div className="flex flex-col md:flex-row gap-6 items-stretch">
+          <div className="w-full md:w-[40%] shrink-0">
+            <TrendingPostsSlider />
+          </div>
+          <div className="w-full md:flex-1">
+            <OptimizeBudgetTips
+              ads={[{ src: "/ads2.gif", alt: "Advertisement" }]}
+              rotateInterval={0}
+            />
+          </div>
         </div>
 
         {/* Row 3: Finance Posts & Investing Posts */}
@@ -42,7 +49,7 @@ export default function WwbDashboard({ userRole }: WwbDashboardProps) {
       {/* ── Right Sidebar Column ── */}
       <aside className="w-full xl:w-[340px] shrink-0 flex flex-col gap-6 xl:sticky xl:top-6 xl:h-[calc(100vh-3rem)] xl:overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         <MyCardWidget />
-        <TransactionHistory />
+        <PopularPosts />
       </aside>
     </div>
   );

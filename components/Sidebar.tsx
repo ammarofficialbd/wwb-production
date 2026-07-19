@@ -121,9 +121,14 @@ export default function Sidebar({ activePage = "Dashboard", onNavigate, isCollap
 
       {/* Ads section */}
       <div className={`mt-6 mb-4 w-full transition-all duration-300 ease-in-out ${isCollapsed ? "opacity-0 h-0 hidden" : "opacity-100 flex-1"}`}>
-        <div className="rounded-xl overflow-hidden shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow relative h-[336px] w-full">
-          <img src="/ads1.png" alt="Google Ads" className="w-full h-full object-cover" />
-        </div>
+        <a
+          href="https://affiliates.investingchallenges.com/Tracking/click/?affid=2276&campaign=1326&product_id=2&t_type=Sub Affiliate&t_lang=EN"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block rounded-xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative h-[336px] w-full"
+        >
+          <img src="/ads(invetsing.com).gif" alt="Investing Challenges" className="w-full h-full object-cover" />
+        </a>
       </div>
 
       {user ? (
