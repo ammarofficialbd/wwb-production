@@ -146,7 +146,11 @@ export default function LoginModal() {
               />
               <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
                 {isChecking && <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />}
-                {!isChecking && isRegisterMode && <Check size={18} className="text-green-500" title="Available to register" />}
+                {!isChecking && isRegisterMode && (
+                  <span title="Available to register">
+                    <Check size={18} className="text-green-500" />
+                  </span>
+                )}
                 {!isChecking && isLoginMode && <div className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">Login</div>}
               </div>
             </div>
