@@ -1,7 +1,8 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   Search,
   ArrowUpRight,
@@ -13,7 +14,6 @@ import {
   Share2,
   Bookmark,
 } from "lucide-react";
-import BlogDetailPage from "@/components/BlogDetailPage";
 import { getPosts } from "@/app/actions/blog";
 
 
@@ -66,7 +66,7 @@ function BlogCardSkeleton() {
 }
 
 /* --- Single Blog Post Card --- */
-function BlogCard({ post, onClick }: { post: any; onClick: () => void }) {
+function BlogCard({ post }: { post: any }) {
   const [liked, setLiked] = useState(false);
   const [disliked, setDisliked] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -82,7 +82,7 @@ function BlogCard({ post, onClick }: { post: any; onClick: () => void }) {
   const [copied, setCopied] = useState(false);
 
   const handleLike = (e: React.MouseEvent) => {
-    e.stopPropagation();
+    e.preventDefault();
     if (liked) {
       setLiked(false);
       setLikeCount((c) => c - 1);
@@ -97,7 +97,7 @@ function BlogCard({ post, onClick }: { post: any; onClick: () => void }) {
   };
 
   const handleDislike = (e: React.MouseEvent) => {
-    e.stopPropagation();
+    e.preventDefault();
     if (disliked) {
       setDisliked(false);
       setDislikeCount((c) => c - 1);
@@ -112,102 +112,101 @@ function BlogCard({ post, onClick }: { post: any; onClick: () => void }) {
   };
 
   const handleShare = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(window.location.href).catch(() => {});
+    e.preventDefault();
+    navigator.clipboard.writeText(window.location.origin + "/my-feed/" + (post.slug || post.id)).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleSave = (e: React.MouseEvent) => {
-    e.stopPropagation();
+    e.preventDefault();
     setSaved((s) => !s);
   };
 
-  console.log(post);
-
   return (
-    <article onClick={onClick} className="blog-card group">
-      {/* Image */}
-      <div className="blog-card__image-wrap">
-        <Image
-          src={post.image || post.main_image}
-          alt={post.title}
-          fill
-          className="blog-card__image"
-          sizes="(max-width: 768px) 100vw, 33vw"
-          unoptimized
-        />
-        <div className="blog-card__tags">
-          {post.tags.slice(0, 2).map((tag: string, i: number) => (
-            <span key={i} className="blog-card__tag">
-              {tag}
-            </span>
-          ))}
+    <Link href={`/my-feed/${post.slug || post.id}`} className="blog-card group block">
+      <article>
+        {/* Image */}
+        <div className="blog-card__image-wrap">
+          <Image
+            src={post.image || post.main_image}
+            alt={post.title}
+            fill
+            className="blog-card__image"
+            sizes="(max-width: 768px) 100vw, 33vw"
+            unoptimized
+          />
+          <div className="blog-card__tags">
+            {post.tags.slice(0, 2).map((tag: string, i: number) => (
+              <span key={i} className="blog-card__tag">
+                {tag}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="blog-card__body">
-        <span className="blog-card__date">{post.date}</span>
-        <h3 className="blog-card__title">{post.title}</h3>
-        <p className="blog-card__desc">{post.desc}</p>
-        <div className="blog-card__divider" />
+        {/* Content */}
+        <div className="blog-card__body">
+          <span className="blog-card__date">{post.date}</span>
+          <h3 className="blog-card__title">{post.title}</h3>
+          <p className="blog-card__desc">{post.desc}</p>
+          <div className="blog-card__divider" />
 
-        {/* Action Bar */}
-        <div
-          className="blog-card__actions"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            onClick={handleLike}
-            className={`blog-card__action-btn ${liked ? "blog-card__action-btn--liked" : ""}`}
-            aria-label="Like"
+          {/* Action Bar */}
+          <div
+            className="blog-card__actions"
+            onClick={(e) => e.preventDefault()}
           >
-            <ThumbsUp size={14} strokeWidth={2} />
-            <span>{likeCount}</span>
-          </button>
+            <button
+              onClick={handleLike}
+              className={`blog-card__action-btn ${liked ? "blog-card__action-btn--liked" : ""}`}
+              aria-label="Like"
+            >
+              <ThumbsUp size={14} strokeWidth={2} />
+              <span>{likeCount}</span>
+            </button>
 
-          <button
-            onClick={handleDislike}
-            className={`blog-card__action-btn ${disliked ? "blog-card__action-btn--disliked" : ""}`}
-            aria-label="Dislike"
-          >
-            <ThumbsDown size={14} strokeWidth={2} />
-            <span>{dislikeCount}</span>
-          </button>
+            <button
+              onClick={handleDislike}
+              className={`blog-card__action-btn ${disliked ? "blog-card__action-btn--disliked" : ""}`}
+              aria-label="Dislike"
+            >
+              <ThumbsDown size={14} strokeWidth={2} />
+              <span>{dislikeCount}</span>
+            </button>
 
-          <button
-            onClick={(e) => { e.stopPropagation(); onClick(); }}
-            className="blog-card__action-btn"
-            aria-label="Comment"
-          >
-            <MessageCircle size={14} strokeWidth={2} />
-            <span>{commentCount}</span>
-          </button>
+            <button
+              className="blog-card__action-btn"
+              aria-label="Comment"
+            >
+              <MessageCircle size={14} strokeWidth={2} />
+              <span>{commentCount}</span>
+            </button>
 
-          <button
-            onClick={handleShare}
-            className={`blog-card__action-btn ${copied ? "blog-card__action-btn--shared" : ""}`}
-            aria-label="Share"
-          >
-            <Share2 size={14} strokeWidth={2} />
-            <span>{copied ? "Copied!" : "Share"}</span>
-          </button>
+            <button
+              onClick={handleShare}
+              className={`blog-card__action-btn ${copied ? "blog-card__action-btn--shared" : ""}`}
+              aria-label="Share"
+            >
+              <Share2 size={14} strokeWidth={2} />
+              <span>{copied ? "Copied!" : "Share"}</span>
+            </button>
 
-          <button
-            onClick={handleSave}
-            className={`blog-card__action-btn blog-card__action-btn--save ${saved ? "blog-card__action-btn--saved" : ""}`}
-            aria-label="Save"
-          >
-            <Bookmark
-              size={14}
-              strokeWidth={2}
-              fill={saved ? "currentColor" : "none"}
-            />
-          </button>
+            <button
+              onClick={handleSave}
+              className={`blog-card__action-btn blog-card__action-btn--save ${saved ? "blog-card__action-btn--saved" : ""}`}
+              aria-label="Save"
+            >
+              <Bookmark
+                size={14}
+                strokeWidth={2}
+                fill={saved ? "currentColor" : "none"}
+              />
+            </button>
+          </div>
         </div>
-      </div>
-    </article>
+      </article>
+    </Link>
   );
 }
 
@@ -298,7 +297,6 @@ function TopStoriesSidebar() {
 export default function BusinessFeed() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedPost, setSelectedPost] = useState<any | null>(null);
   const [allPosts, setAllPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -307,7 +305,6 @@ export default function BusinessFeed() {
       setIsLoading(true);
       try {
         const dbPosts = await getPosts();
-        console.log(dbPosts[0].main_image);
         const mapped = dbPosts.map((p: any) => {
           const categoryName =
             typeof p.category === "object" && p.category?.name
@@ -360,18 +357,6 @@ export default function BusinessFeed() {
       );
     return matchCat && matchSearch;
   });
-
-  /* Show Blog Detail Page */
-  if (selectedPost) {
-    const relatedPosts = allPosts.filter((p) => p.id !== selectedPost.id);
-    return (
-      <BlogDetailPage
-        post={selectedPost}
-        onBack={() => setSelectedPost(null)}
-        relatedPosts={relatedPosts}
-      />
-    );
-  }
 
   return (
     <div className="flex flex-col xl:flex-row gap-6 w-full items-start">
@@ -428,7 +413,6 @@ export default function BusinessFeed() {
               <BlogCard
                 key={post.id}
                 post={post}
-                onClick={() => setSelectedPost(post)}
               />
             ))}
           </div>

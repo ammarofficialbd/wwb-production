@@ -4,21 +4,8 @@ import { useState, useEffect } from "react";
 import { useAuth, Role } from "@/context/AuthContext";
 import { X, Check, Briefcase, Code, Building, User, Laptop, Globe, Flame, Shield, TrendingUp, Cpu, Gem, Rocket, Eye, EyeOff } from "lucide-react";
 
-// Replace emojis with Lucide React icons
-const AVATARS = [
-  { icon: Briefcase, color: "text-blue-500" },
-  { icon: Code, color: "text-green-500" },
-  { icon: Building, color: "text-indigo-500" },
-  { icon: User, color: "text-purple-500" },
-  { icon: Laptop, color: "text-pink-500" },
-  { icon: Globe, color: "text-teal-500" },
-  { icon: Flame, color: "text-orange-500" },
-  { icon: Shield, color: "text-red-500" },
-  { icon: TrendingUp, color: "text-emerald-500" },
-  { icon: Cpu, color: "text-cyan-500" },
-  { icon: Gem, color: "text-violet-500" },
-  { icon: Rocket, color: "text-amber-500" }
-];
+import Image from "next/image";
+import { AVATAR_URLS } from "@/lib/avatars";
 
 export default function LoginModal() {
   const { showLoginModal, setShowLoginModal, login } = useAuth();
@@ -223,21 +210,20 @@ export default function LoginModal() {
                 <label className="block text-sm font-semibold text-[var(--ink)] mb-2">
                   Select an Avatar
                 </label>
-                <div className="grid grid-cols-6 gap-2">
-                  {AVATARS.map((avatar, index) => {
-                    const Icon = avatar.icon;
+                <div className="grid grid-cols-5 gap-2 sm:grid-cols-5">
+                  {AVATAR_URLS.map((url, index) => {
                     return (
                       <button
                         key={index}
                         type="button"
                         onClick={() => setAvatarId(index)}
-                        className={`aspect-square flex items-center justify-center rounded-xl transition-all ${
+                        className={`relative aspect-square flex items-center justify-center rounded-xl overflow-hidden transition-all ${
                           avatarId === index 
-                            ? 'bg-[var(--violet)] bg-opacity-10 ring-2 ring-[var(--violet)] shadow-sm scale-105' 
-                            : 'bg-gray-50 hover:bg-gray-100'
+                            ? 'ring-2 ring-[var(--violet)] shadow-sm scale-105' 
+                            : 'hover:opacity-80'
                         }`}
                       >
-                        <Icon size={22} className={avatarId === index ? avatar.color : 'text-gray-400'} strokeWidth={avatarId === index ? 2.5 : 2} />
+                        <Image src={url} alt={`Avatar ${index + 1}`} fill className="object-cover" unoptimized />
                       </button>
                     )
                   })}

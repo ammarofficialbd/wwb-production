@@ -132,7 +132,7 @@ export default function PopularPosts() {
             return (
               <a
                 key={post.id}
-                href={post.slug ? `/blog/${post.slug}` : "#"}
+                href={post.slug ? `/my-feed/${post.slug}` : "#"}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex justify-between items-center group cursor-pointer hover:opacity-90 transition-opacity"

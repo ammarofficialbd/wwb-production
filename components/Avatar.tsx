@@ -12,7 +12,23 @@ function hashName(name: string) {
   return sum;
 }
 
-export default function Avatar({ name, size = 32 }: { name: string; size?: number }) {
+import Image from "next/image";
+import { AVATAR_URLS } from "@/lib/avatars";
+
+export default function Avatar({ name, size = 32, avatarId }: { name: string; size?: number; avatarId?: number }) {
+  const url = avatarId !== undefined && avatarId >= 0 && avatarId < AVATAR_URLS.length ? AVATAR_URLS[avatarId] : null;
+
+  if (url) {
+    return (
+      <div 
+        className="rounded-full overflow-hidden relative shrink-0" 
+        style={{ width: size, height: size }}
+      >
+        <Image src={url} alt={name} fill className="object-cover" unoptimized />
+      </div>
+    );
+  }
+
   const initials = name
     .split(" ")
     .map((p) => p[0])

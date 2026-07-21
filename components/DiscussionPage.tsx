@@ -27,6 +27,154 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import EmojiPicker from "emoji-picker-react";
+import Image from "next/image";
+import { AVATAR_URLS } from "@/lib/avatars";
+import { sortedKeywords } from "@/lib/businessKeywords";
+import Link from "next/link";
+
+// ─── Article type ─────────────────────────────────────────────────────────────
+interface Article {
+  id: string;
+  title: string;
+  slug: string;
+  intro: string;
+  main_image: string;
+  category_name: string;
+  published_at: string;
+}
+
+// ─── Keyword Popup ────────────────────────────────────────────────────────────
+function KeywordChip({ word, isOwn }: { word: string; isOwn: boolean }) {
+  const [show, setShow] = useState(false);
+  const [articles, setArticles] = useState<Article[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chipRef = useRef<HTMLSpanElement>(null);
+
+  const handleMouseEnter = () => {
+    timerRef.current = setTimeout(async () => {
+      setShow(true);
+      if (articles === null) {
+        setLoading(true);
+        try {
+          const res = await fetch(`/api/articles/search?keyword=${encodeURIComponent(word)}`);
+          const data = await res.json();
+          setArticles(data.articles || []);
+        } catch {
+          setArticles([]);
+        } finally {
+          setLoading(false);
+        }
+      }
+    }, 300);
+  };
+
+  const handleMouseLeave = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setShow(false);
+  };
+
+  return (
+    <span className="relative inline-block" ref={chipRef}>
+      <span
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        className={`font-bold px-1.5 py-0.5 rounded mx-0.5 inline-block cursor-pointer underline decoration-dotted underline-offset-2 transition-all
+          ${isOwn
+            ? "bg-white/20 text-white hover:bg-white/30"
+            : "bg-[rgba(15,222,117,0.15)] text-[#0abf62] hover:bg-[rgba(15,222,117,0.28)]"
+          }`}
+      >
+        {word}
+      </span>
+      {show && (
+        <div
+          onMouseEnter={() => setShow(true)}
+          onMouseLeave={handleMouseLeave}
+          className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden"
+          style={{ minWidth: 260 }}
+        >
+          {/* Header */}
+          <div className="px-4 py-2.5 border-b border-gray-50 bg-gradient-to-r from-[#f0fdf4] to-white">
+            <p className="text-xs font-bold text-[#0abf62] uppercase tracking-wide">📰 Related Articles</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">on &quot;{word}&quot;</p>
+          </div>
+          <div className="p-2 flex flex-col gap-2">
+            {loading ? (
+              // Skeleton
+              [1,2].map(i => (
+                <div key={i} className="flex gap-2 p-2 animate-pulse">
+                  <div className="w-12 h-10 rounded-lg bg-gray-100 shrink-0" />
+                  <div className="flex-1 flex flex-col gap-1.5 justify-center">
+                    <div className="h-3 bg-gray-100 rounded w-4/5" />
+                    <div className="h-2 bg-gray-100 rounded w-3/5" />
+                  </div>
+                </div>
+              ))
+            ) : articles && articles.length > 0 ? (
+              articles.map(a => (
+                <Link
+                  key={a.id}
+                  href={`/my-feed/${a.slug}`}
+                  target="_blank"
+                  className="flex gap-2 p-2 rounded-xl hover:bg-gray-50 transition-colors group"
+                >
+                  {a.main_image && (
+                    <div className="w-12 h-10 rounded-lg overflow-hidden shrink-0 bg-gray-100">
+                      <img src={a.main_image} alt={a.title} className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] font-semibold text-gray-800 line-clamp-2 leading-tight group-hover:text-[#0abf62] transition-colors">{a.title}</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5 capitalize">{a.category_name}</p>
+                  </div>
+                </Link>
+              ))
+            ) : (
+              <p className="text-xs text-gray-400 text-center py-3">No articles found for this keyword.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
+// ─── Tokenize message text into segments (plain text vs keyword) ───────────────
+function tokenizeMessage(text: string): Array<{ type: "text" | "keyword"; value: string }> {
+  const tokens: Array<{ type: "text" | "keyword"; value: string }> = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    let matched = false;
+    for (const kw of sortedKeywords) {
+      const idx = remaining.toLowerCase().indexOf(kw.toLowerCase());
+      if (idx === -1) continue;
+
+      // Check word boundaries (simple: char before/after must not be alpha)
+      const before = idx === 0 ? " " : remaining[idx - 1];
+      const after = idx + kw.length >= remaining.length ? " " : remaining[idx + kw.length];
+      const isBoundaryBefore = /[^a-zA-Z0-9]/.test(before);
+      const isBoundaryAfter = /[^a-zA-Z0-9]/.test(after);
+
+      if (!isBoundaryBefore || !isBoundaryAfter) continue;
+
+      // Add preceding plain text
+      if (idx > 0) {
+        tokens.push({ type: "text", value: remaining.slice(0, idx) });
+      }
+      tokens.push({ type: "keyword", value: remaining.slice(idx, idx + kw.length) });
+      remaining = remaining.slice(idx + kw.length);
+      matched = true;
+      break;
+    }
+    if (!matched) {
+      tokens.push({ type: "text", value: remaining });
+      remaining = "";
+    }
+  }
+  return tokens;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Channel {
@@ -66,6 +214,19 @@ const avatarColors = [
 ];
 
 function UserAvatar({ username, avatarId, size = 8 }: { username: string; avatarId?: number; size?: number }) {
+  const url = avatarId !== undefined && avatarId >= 0 && avatarId < AVATAR_URLS.length ? AVATAR_URLS[avatarId] : null;
+
+  if (url) {
+    return (
+      <div 
+        className="rounded-full overflow-hidden relative shrink-0" 
+        style={{ width: size * 4, height: size * 4 }}
+      >
+        <Image src={url} alt={username} fill className="object-cover" unoptimized />
+      </div>
+    );
+  }
+
   const color = avatarColors[(avatarId || 0) % avatarColors.length];
   return (
     <div
@@ -574,25 +735,7 @@ export default function DiscussionPage() {
                   prevMsg.userId !== msg.userId ||
                   new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime() > 5 * 60000;
 
-                const highlightBusinessWords = (text: string) => {
-                  const keywords = ["business", "finance", "money", "tax", "income", "stock", "company", "investment", "profit", "revenue", "market", "trade", "startup", "bank", "corporate", "economy"];
-                  const regex = new RegExp(`\\b(${keywords.join("|")})\\b`, "gi");
-                  const parts = text.split(regex);
-                  return parts.map((part, i) => {
-                    if (keywords.some((k) => k.toLowerCase() === part.toLowerCase())) {
-                      return (
-                        <span
-                          key={i}
-                          className="font-bold px-1.5 py-0.5 rounded mx-0.5 inline-block"
-                          style={{ background: "rgba(15,222,117,0.15)", color: "#0abf62" }}
-                        >
-                          {part}
-                        </span>
-                      );
-                    }
-                    return part;
-                  });
-                };
+
 
                 return (
                   <div
@@ -614,8 +757,19 @@ export default function DiscussionPage() {
                           )}
                         </div>
                       )}
-                      <div className={`text-[15px] leading-relaxed break-words text-gray-700 max-w-[85%] ${isOwn ? "text-right" : "text-left"}`}>
-                        {highlightBusinessWords(msg.content)}
+                      <div className={`text-[15px] leading-relaxed break-words px-4 py-3 rounded-2xl shadow-sm max-w-[85%] 
+                        ${isOwn 
+                          ? "bg-[#06715b] text-white rounded-tr-sm text-right" 
+                          : "bg-white text-gray-700 rounded-tl-sm text-left border border-gray-50"
+                        }`}
+                      >
+                        {tokenizeMessage(msg.content).map((token, ti) =>
+                          token.type === "keyword" ? (
+                            <KeywordChip key={ti} word={token.value} isOwn={isOwn} />
+                          ) : (
+                            <span key={ti}>{token.value}</span>
+                          )
+                        )}
                       </div>
                     </div>
                   </div>

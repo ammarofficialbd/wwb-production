@@ -18,13 +18,16 @@ import {
   UserCircle
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import Avatar from "@/components/Avatar";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const mainMenu = [
-  { label: "Dashboard", icon: LayoutGrid, requiresAuth: false },
-  { label: "My Feed", icon: Rss, requiresAuth: false },
-  { label: "Bids", icon: Gavel, requiresAuth: false },
-  { label: "Chat", icon: MessageSquare, requiresAuth: true },
-  { label: "Discussion", icon: MessageCircle, requiresAuth: true },
+  { label: "Dashboard", icon: LayoutGrid, requiresAuth: false, href: "/" },
+  { label: "My Feed", icon: Rss, requiresAuth: false, href: "/my-feed" },
+  { label: "Bids", icon: Gavel, requiresAuth: false, href: "/bids" },
+  { label: "Chat", icon: MessageSquare, requiresAuth: true, href: "/chat" },
+  { label: "Discussion", icon: MessageCircle, requiresAuth: true, href: "/discussion" },
 ];
 
 const settingsMenu = [
@@ -33,22 +36,24 @@ const settingsMenu = [
 ];
 
 interface SidebarProps {
-  activePage?: string;
-  onNavigate?: (label: string) => void;
   isCollapsed?: boolean;
   onToggleSidebar?: () => void;
   onCloseMobile?: () => void;
 }
 
-export default function Sidebar({ activePage = "Dashboard", onNavigate, isCollapsed = false, onToggleSidebar, onCloseMobile }: SidebarProps) {
+export default function Sidebar({ isCollapsed = false, onToggleSidebar, onCloseMobile }: SidebarProps) {
   const { user, setShowLoginModal, logout } = useAuth();
+  const pathname = usePathname();
 
-  const handleNav = (label: string, requiresAuth: boolean) => {
+  const handleNav = (e: React.MouseEvent<HTMLAnchorElement>, requiresAuth: boolean) => {
     if (requiresAuth && !user) {
+      e.preventDefault();
       setShowLoginModal(true);
       return;
     }
-    onNavigate?.(label);
+    if (onCloseMobile) {
+      onCloseMobile();
+    }
   };
 
   return (
@@ -81,12 +86,13 @@ export default function Sidebar({ activePage = "Dashboard", onNavigate, isCollap
         </p>
       )}
       <nav className="flex flex-col gap-1 w-full">
-        {mainMenu.map(({ label, icon: Icon, requiresAuth }) => {
-          const isActive = activePage === label;
+        {mainMenu.map(({ label, icon: Icon, requiresAuth, href }) => {
+          const isActive = pathname === href;
           return (
-            <button
+            <Link
               key={label}
-              onClick={() => handleNav(label, requiresAuth)}
+              href={href}
+              onClick={(e) => handleNav(e, requiresAuth)}
               title={isCollapsed ? label : undefined}
               className={`flex items-center ${isCollapsed ? "justify-center px-0" : "gap-3 px-4"} py-2.5 rounded-xl text-sm font-medium text-left transition-colors w-full ${
                 isActive
@@ -96,7 +102,7 @@ export default function Sidebar({ activePage = "Dashboard", onNavigate, isCollap
             >
               <Icon size={18} strokeWidth={2} className="shrink-0" />
               {!isCollapsed && <span className="whitespace-nowrap">{label}</span>}
-            </button>
+            </Link>
           );
         })}
       </nav>
@@ -134,14 +140,15 @@ export default function Sidebar({ activePage = "Dashboard", onNavigate, isCollap
       {user ? (
         <div className={`mt-auto pt-4 border-t border-gray-100 flex flex-col gap-3 w-full ${isCollapsed ? "items-center" : ""}`}>
           <div className={`flex items-center ${isCollapsed ? "justify-center" : "justify-between px-2"} w-full`}>
-            {!isCollapsed ? (
-              <div>
-                <p className="text-sm font-bold text-[var(--ink)] truncate">{user.username}</p>
-                <p className="text-xs text-[var(--muted)] capitalize">{user.role}</p>
-              </div>
-            ) : (
-              <UserCircle size={24} className="text-gray-400 shrink-0" />
-            )}
+            <div className="flex items-center gap-3">
+              <Avatar name={user.username} size={36} avatarId={user.avatarId} />
+              {!isCollapsed && (
+                <div>
+                  <p className="text-sm font-bold text-[var(--ink)] truncate">{user.username}</p>
+                  <p className="text-xs text-[var(--muted)] capitalize">{user.role}</p>
+                </div>
+              )}
+            </div>
             <button 
               onClick={logout} 
               className={`p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors ${isCollapsed ? "mt-2" : ""}`} 

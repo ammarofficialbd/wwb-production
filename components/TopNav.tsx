@@ -78,7 +78,7 @@ export default function TopNav({ onToggleSidebar, isSidebarCollapsed, onToggleMo
 
         {user ? (
           <button className="top-nav__user">
-            <Avatar name={user.username} size={38} />
+            <Avatar name={user.username} size={38} avatarId={user.avatarId} />
             <div className="top-nav__user-info">
               <span className="top-nav__user-name">{user.username}</span>
               <span className="top-nav__user-role capitalize">{user.role}</span>

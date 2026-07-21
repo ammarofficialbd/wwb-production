@@ -322,20 +322,7 @@ function RightSidebar({ category }: { category: string }) {
         </div>
       </div>
 
-      {/* Newsletter */}
-      <div className="relative rounded-[22px] overflow-hidden p-6 flex flex-col gap-3" style={{ background: "linear-gradient(145deg,#0f2d1a,#1a4d2e,#2d6a4f)" }}>
-        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle,rgba(92,184,92,0.25),transparent 70%)" }} />
-        <div className="w-11 h-11 rounded-[14px] flex items-center justify-center border border-white/20" style={{ background: "rgba(255,255,255,0.12)" }}>
-          <Zap size={20} className="text-white" />
-        </div>
-        <h3 className="text-[15px] font-extrabold text-white leading-tight">Stay Ahead of the Curve</h3>
-        <p className="text-[11.5px] text-white/65 leading-relaxed">Get the week&apos;s top business insights delivered to your inbox — free.</p>
-        <input type="email" placeholder="your@email.com" className="w-full text-[12px] px-3.5 py-2.5 rounded-xl outline-none placeholder:text-white/40 text-white" style={{ background: "rgba(255,255,255,0.09)", border: "1.5px solid rgba(255,255,255,0.15)" }} />
-        <button className="w-full flex items-center justify-center gap-1.5 text-[12.5px] font-bold text-white py-3 rounded-xl transition-all hover:opacity-90" style={{ background: "#5cb85c", boxShadow: "0 4px 14px rgba(92,184,92,0.4)" }}>
-          Subscribe Free <ArrowUpRight size={13} />
-        </button>
-        <p className="text-[10px] text-white/40 text-center">No spam · Unsubscribe anytime</p>
-      </div>
+     
 
     </aside>
   );
@@ -373,7 +360,11 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
 
   const handleBack = () => {
     if (onBack) onBack();
-    else router.push('/blog');
+    else router.push('/my-feed');
+  };
+
+  const goHome = () => {
+    router.push('/');
   };
 
   useEffect(() => {
@@ -385,7 +376,7 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
     
     // SEO Update: Set page title and meta description dynamically
     const originalTitle = document.title;
-    document.title = `${post.title} | Blog`;
+    document.title = `${post.title} | My Feed | WWB`;
     
     let metaDesc = document.querySelector('meta[name="description"]');
     let originalMetaDesc = "";
@@ -415,7 +406,6 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
 
   const likeCount = (parseInt(content.likes.replace(",", "")) + (liked ? 1 : 0)).toLocaleString();
 
-  // SEO: Generate JSON-LD Article Schema
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Article",
@@ -429,7 +419,7 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
     },
     "publisher": {
       "@type": "Organization",
-      "name": "BusinessFeed",
+      "name": "WWB - World Wide Business",
       "logo": {
         "@type": "ImageObject",
         "url": "https://via.placeholder.com/150"
@@ -443,12 +433,28 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
     }
   };
 
+  // BreadcrumbList schema for Google Search Console
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": typeof window !== 'undefined' ? window.location.origin : 'https://worldwidebusiness.live' },
+      { "@type": "ListItem", "position": 2, "name": "My Feed", "item": (typeof window !== 'undefined' ? window.location.origin : 'https://worldwidebusiness.live') + '/my-feed' },
+      { "@type": "ListItem", "position": 3, "name": content.category, "item": (typeof window !== 'undefined' ? window.location.origin : 'https://worldwidebusiness.live') + '/my-feed' },
+      { "@type": "ListItem", "position": 4, "name": post.title, "item": typeof window !== 'undefined' ? window.location.href : '' }
+    ]
+  };
+
   return (
     <div className="flex flex-col gap-0 w-full animate-fade-in">
-      {/* SEO: Inject JSON-LD Schema */}
+      {/* SEO: Inject JSON-LD Schemas */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
 
       {/* ── Breadcrumb ── */}
@@ -456,18 +462,44 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
         <button onClick={handleBack} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border-[1.5px] border-gray-200 bg-white text-[12px] font-bold text-gray-600 hover:border-[#5cb85c] hover:text-[#5cb85c] hover:bg-[#f0faf0] transition-all flex-shrink-0">
           <ArrowLeft size={14} strokeWidth={2.5} /> Back
         </button>
-        <div className="flex items-center gap-1 flex-wrap">
-          {[{ label: "Home", click: true }, { label: "Blog", click: true }, { label: content.category, click: false }].map((crumb, i) => (
-            <span key={i} className="flex items-center gap-1">
-              {i > 0 && <ChevronRight size={11} className="text-gray-300" />}
-              <span onClick={crumb.click ? handleBack : undefined} className={`text-[11.5px] font-medium ${crumb.click ? "text-gray-400 cursor-pointer hover:text-[#5cb85c]" : "text-gray-500 font-semibold"}`}>
-                {crumb.label}
-              </span>
+        <nav aria-label="breadcrumb" className="flex items-center gap-1 flex-wrap">
+          {/* Home */}
+          <span className="flex items-center gap-1">
+            <span
+              onClick={goHome}
+              className="text-[11.5px] font-medium text-gray-400 cursor-pointer hover:text-[#5cb85c] transition-colors"
+            >
+              Home
             </span>
-          ))}
-          <ChevronRight size={11} className="text-gray-300" />
-          <span className="text-[11.5px] font-semibold text-gray-700 max-w-[200px] truncate">{post.title}</span>
-        </div>
+          </span>
+          {/* My Feed */}
+          <span className="flex items-center gap-1">
+            <ChevronRight size={11} className="text-gray-300" />
+            <span
+              onClick={handleBack}
+              className="text-[11.5px] font-medium text-gray-400 cursor-pointer hover:text-[#5cb85c] transition-colors"
+            >
+              My Feed
+            </span>
+          </span>
+          {/* Category */}
+          <span className="flex items-center gap-1">
+            <ChevronRight size={11} className="text-gray-300" />
+            <span
+              onClick={handleBack}
+              className="text-[11.5px] font-medium text-gray-400 cursor-pointer hover:text-[#5cb85c] transition-colors"
+            >
+              {content.category}
+            </span>
+          </span>
+          {/* Blog Title (current, no action) */}
+          <span className="flex items-center gap-1">
+            <ChevronRight size={11} className="text-gray-300" />
+            <span className="text-[11.5px] font-semibold text-gray-700 max-w-[220px] truncate" title={post.title}>
+              {post.title}
+            </span>
+          </span>
+        </nav>
       </div>
 
       {/* ── Hero Row: 75% content + 25% ads — aligns with content area below ── */}
@@ -545,7 +577,7 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
           </div>
 
           {/* Hero image — full bleed bottom */}
-          <div className="relative w-full flex-1" style={{ minHeight: "450px" }}>
+          <div className="relative w-full flex-1" style={{ minHeight: "700px" }}>
             <Image src={content.image} alt={post.title} fill className="object-cover" sizes="(max-width: 1024px) 100vw, 75vw" priority unoptimized />
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
             {/* Category chip over image */}
@@ -591,6 +623,21 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
               <p className="text-[9.5px] text-gray-400 text-center">No credit card required · Cancel anytime</p>
             </div>
           </div>
+
+           {/* Newsletter 
+      <div className="relative rounded-[22px] overflow-hidden p-6 flex flex-col gap-3" style={{ background: "linear-gradient(145deg,#0f2d1a,#1a4d2e,#2d6a4f)" }}>
+        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle,rgba(92,184,92,0.25),transparent 70%)" }} />
+        <div className="w-11 h-11 rounded-[14px] flex items-center justify-center border border-white/20" style={{ background: "rgba(255,255,255,0.12)" }}>
+          <Zap size={20} className="text-white" />
+        </div>
+        <h3 className="text-[15px] font-extrabold text-white leading-tight">Stay Ahead of the Curve</h3>
+        <p className="text-[11.5px] text-white/65 leading-relaxed">Get the week&apos;s top business insights delivered to your inbox — free.</p>
+        <input type="email" placeholder="your@email.com" className="w-full text-[12px] px-3.5 py-2.5 rounded-xl outline-none placeholder:text-white/40 text-white" style={{ background: "rgba(255,255,255,0.09)", border: "1.5px solid rgba(255,255,255,0.15)" }} />
+        <button className="w-full flex items-center justify-center gap-1.5 text-[12.5px] font-bold text-white py-3 rounded-xl transition-all hover:opacity-90" style={{ background: "#5cb85c", boxShadow: "0 4px 14px rgba(92,184,92,0.4)" }}>
+          Subscribe Free <ArrowUpRight size={13} />
+        </button>
+        <p className="text-[10px] text-white/40 text-center">No spam · Unsubscribe anytime</p>
+      </div>*/}
 
           {/* Vertical ad banner */}
           <div className="relative rounded-[22px] h-[336px] overflow-hidden p-5 flex flex-col gap-3" style={{ background: "linear-gradient(160deg,#1a4d2e,#2d6a4f,#40916c)" }}>
@@ -668,7 +715,7 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
                     }
                   }} id={`heading-btn-${idx}`} className="absolute -left-10 top-1 text-[14px] font-bold border border-gray-200 bg-gray-50 hover:bg-[#f0faf0] text-gray-400 hover:text-[#5cb85c] hover:border-[#5cb85c] px-1.5 py-0.5 rounded cursor-pointer transition-all opacity-0 group-hover/tblock:opacity-100 flex items-center justify-center shadow-sm">BN</button>
                 )}
-                <h2 id={`heading-text-${idx}`} data-lang="en" className="text-xl font-extrabold text-gray-900 leading-tight tracking-tight pb-2 border-b-2 border-[#f0faf0]">{section.heading}</h2>
+                <h2 id={`heading-text-${idx}`} data-lang="en" className="text-xl font-bold text-gray-900 leading-tight tracking-tight pb-2 border-b-2 border-[#f0faf0]">{section.heading}</h2>
               </div>
 
               {section.body && (

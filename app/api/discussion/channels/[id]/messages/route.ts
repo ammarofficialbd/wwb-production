@@ -119,5 +119,13 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to send message', details: error }, { status: 500 })
   }
 
+  // Cleanup messages older than 7 days across all channels to save DB space
+  // We await this to ensure it runs even in serverless environments
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  await supabaseDiscussion
+    .from('messages')
+    .delete()
+    .lt('created_at', sevenDaysAgo);
+
   return NextResponse.json({ message: toCamelMessage(message) })
 }
