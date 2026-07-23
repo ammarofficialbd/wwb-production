@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { sortedKeywords } from "@/lib/businessKeywords";
+import { getPosts } from "@/app/actions/blog";
 import {
   ArrowLeft,
   Clock,
@@ -45,21 +47,71 @@ interface BlogDetailPageProps {
   relatedPosts?: any[];
 }
 
-/* ─── Content generator ─── */
+// Escape regex characters
+function escapeRegExp(string: string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Build regex once for case-insensitive matching
+const keywordRegexStr = sortedKeywords.map(k => {
+  const escaped = escapeRegExp(k);
+  const startBoundary = /^\w/.test(k) ? '\\b' : '';
+  const endBoundary = /\w$/.test(k) ? '\\b' : '';
+  return `${startBoundary}${escaped}${endBoundary}`;
+}).join('|');
+
+const keywordRegex = new RegExp(`(${keywordRegexStr})`, 'gi');
+
+const colorPalettes = [
+  { text: "#1E3A8A", bg: "#DBEAFE" }, // Blue
+  { text: "#437048", bg: "#DBF0DA" }, // Green
+  { text: "#6F5B8A", bg: "#CCBBE6" }, // Corrected Purple (Deep text, Light box)
+  { text: "#C15F61", bg: "#FEECEC" }, // Red
+  { text: "#B45309", bg: "#FEF3C7" }  // Amber/Orange
+];
+
+function getKeywordPalette(keyword: string) {
+  let hash = 0;
+  for (let i = 0; i < keyword.length; i++) {
+    hash = keyword.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % colorPalettes.length;
+  return colorPalettes[index];
+}
+
+function highlightText(html: string) {
+  if (!html) return html;
+  
+  // Split HTML string by tags
+  const parts = html.split(/(<[^>]+>)/g);
+  const highlightedParts = parts.map(part => {
+    if (part.startsWith('<') && part.endsWith('>')) {
+      return part;
+    }
+    // Highlight matching keywords
+    return part.replace(keywordRegex, (match) => {
+      const palette = getKeywordPalette(match);
+      return `<span class="keyword-highlight cursor-pointer transition-colors px-2.5 py-0.5 mx-0.5 rounded font-semibold" style="color: ${palette.text}; background-color: ${palette.bg};" data-keyword="${match}">${match}</span>`;
+    });
+  });
+  
+  return highlightedParts.join('');
+}
+
 /* ─── Content generator ─── */
 function generateContent(post: any) {
   const cat = post.category || post.category_name || "Blog";
   
   // Parse sections
-  let sections = [];
+  let rawSections = [];
   if (Array.isArray(post.content) && post.content.length > 0) {
-    sections = post.content.map((s: any) => ({
+    rawSections = post.content.map((s: any) => ({
       ...s,
       body: Array.isArray(s.body) ? s.body.join('\n\n') : s.body,
       bodyBn: Array.isArray(s.bodyBn) ? s.bodyBn.join('\n\n') : s.bodyBn,
     }));
   } else if (post.sections && Array.isArray(post.sections)) {
-    sections = post.sections.map((s: any) => ({
+    rawSections = post.sections.map((s: any) => ({
       ...s,
       body: Array.isArray(s.body) ? s.body.join('\n\n') : s.body,
       bodyBn: Array.isArray(s.bodyBn) ? s.bodyBn.join('\n\n') : s.bodyBn,
@@ -68,9 +120,9 @@ function generateContent(post: any) {
     // fallback if no sections and content is string
     const bodyContent = typeof post.content === 'string' ? post.content : (post.description || post.desc);
     if (bodyContent && typeof bodyContent === 'string') {
-      sections = [{ id: "section-1", heading: "Overview", body: bodyContent, list: [], extra: "" }];
+      rawSections = [{ id: "section-1", heading: "Overview", body: bodyContent, list: [], extra: "" }];
     } else {
-      sections = [
+      rawSections = [
         {
           id: "section-1",
           heading: `What is ${cat} and Why Does It Matter?`,
@@ -109,6 +161,17 @@ function generateContent(post: any) {
     }
   }
 
+  // Pre-process sections with keyword highlights
+  const sections = rawSections.map((s: any) => ({
+    ...s,
+    body: s.body ? highlightText(s.body) : "",
+    bodyBn: s.bodyBn ? highlightText(s.bodyBn) : "",
+    list: s.list ? s.list.map((item: string) => highlightText(item)) : [],
+    listBn: s.listBn ? s.listBn.map((item: string) => highlightText(item)) : [],
+    extra: s.extra ? highlightText(s.extra) : "",
+    extraBn: s.extraBn ? highlightText(s.extraBn) : "",
+  }));
+
   const authorName = post.author_name || post.author?.name || post.author || "Haseeb Abbas";
   const authorAvatar = post.author_avatar || post.author?.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&h=80&fit=crop&crop=face";
   const authorBio = post.author_bio || post.author?.bio || "Senior Financial Analyst & Content Strategist";
@@ -117,7 +180,7 @@ function generateContent(post: any) {
   const views = post.metrics?.views || post.views?.toString() || "0";
   const likes = post.metrics?.likes || post.likes?.toString() || "0";
   const comments = post.metrics?.comments || post.comments?.toString() || "0";
-  const intro = post.intro || post.desc || "";
+  const intro = highlightText(post.intro || post.desc || "");
   
   const tocItems = sections.map((s: any, idx: number) => ({
     id: s.id || `section-${idx + 1}`,
@@ -358,6 +421,111 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
   const [liked, setLiked] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
 
+  // States and Ref for business keyword hover preview card
+  const [hoveredKeyword, setHoveredKeyword] = useState<string | null>(null);
+  const [hoveredEl, setHoveredEl] = useState<HTMLElement | null>(null);
+  const [isHoveringTooltip, setIsHoveringTooltip] = useState(false);
+  const [tooltipCoords, setTooltipCoords] = useState({ top: 0, left: 0 });
+  const [allPosts, setAllPosts] = useState<any[]>([]);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        const posts = await getPosts();
+        setAllPosts(posts);
+      } catch (err) {
+        console.error("Failed to fetch posts in BlogDetailPage:", err);
+      }
+    };
+    fetchPosts();
+  }, []);
+
+  const showTooltip = (keyword: string, element: HTMLElement) => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setHoveredKeyword(keyword);
+    setHoveredEl(element);
+  };
+
+  const hideTooltip = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      if (!isHoveringTooltip) {
+        setHoveredKeyword(null);
+        setHoveredEl(null);
+      }
+    }, 200);
+  };
+
+  useEffect(() => {
+    if (hoveredEl) {
+      const rect = hoveredEl.getBoundingClientRect();
+      const scrollX = window.scrollX;
+      const scrollY = window.scrollY;
+      
+      let left = rect.left + scrollX - 10;
+      const tooltipWidth = 320;
+      if (left + tooltipWidth > window.innerWidth) {
+        left = window.innerWidth - tooltipWidth - 20;
+      }
+      if (left < 10) left = 10;
+
+      setTooltipCoords({
+        top: rect.bottom + scrollY + 8,
+        left,
+      });
+    }
+  }, [hoveredEl]);
+
+  useEffect(() => {
+    const handleMouseOver = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const highlightEl = target.closest('.keyword-highlight') as HTMLElement;
+      if (highlightEl) {
+        const kw = highlightEl.getAttribute('data-keyword');
+        if (kw) {
+          showTooltip(kw, highlightEl);
+        }
+      }
+    };
+
+    const handleMouseOut = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const highlightEl = target.closest('.keyword-highlight') as HTMLElement;
+      if (highlightEl) {
+        hideTooltip();
+      }
+    };
+
+    const container = document.getElementById('blog-content-area');
+    if (container) {
+      container.addEventListener('mouseover', handleMouseOver);
+      container.addEventListener('mouseout', handleMouseOut);
+    }
+    return () => {
+      if (container) {
+        container.removeEventListener('mouseover', handleMouseOver);
+        container.removeEventListener('mouseout', handleMouseOut);
+      }
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [allPosts, isHoveringTooltip]);
+
+  const getCorrespondingBlogs = (keyword: string) => {
+    if (!keyword || !allPosts.length) return [];
+    const lowerKw = keyword.toLowerCase();
+    return allPosts
+      .filter(p => {
+        if (p.id === post.id) return false;
+        const titleMatch = p.title?.toLowerCase().includes(lowerKw);
+        const tagMatch = p.tags?.some((t: string) => t.toLowerCase() === lowerKw);
+        const catMatch = typeof p.category === 'string' && p.category.toLowerCase() === lowerKw;
+        const descMatch = (p.desc || p.description || p.intro)?.toLowerCase().includes(lowerKw);
+        return titleMatch || tagMatch || catMatch || descMatch;
+      })
+      .slice(0, 3);
+  };
+
   const handleBack = () => {
     if (onBack) onBack();
     else router.push('/my-feed');
@@ -446,7 +614,7 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
   };
 
   return (
-    <div className="flex flex-col gap-0 w-full animate-fade-in">
+    <div id="blog-content-area" className="flex flex-col gap-0 w-full animate-fade-in relative">
       {/* SEO: Inject JSON-LD Schemas */}
       <script
         type="application/ld+json"
@@ -521,7 +689,7 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
 
             {/* Title + intro */}
             <h1 className="text-2xl md:text-[1.75rem] font-extrabold text-gray-900 leading-tight tracking-tight">{post.title}</h1>
-            <p className="text-[13px] text-gray-400 leading-relaxed">{content.intro}</p>
+            <p className="text-[13px] text-gray-400 leading-relaxed" dangerouslySetInnerHTML={{ __html: content.intro }} />
 
             {/* Author + Meta row */}
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-3 border-t border-gray-100">
@@ -732,7 +900,7 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
                       }
                     }} id={`body-btn-${idx}`} className="absolute -left-10 top-0 text-[12px] font-bold border border-gray-200 bg-gray-50 hover:bg-[#f0faf0] text-gray-400 hover:text-[#5cb85c] hover:border-[#5cb85c] px-1.5 py-0.5 rounded cursor-pointer transition-all opacity-0 group-hover/tblock:opacity-100 flex items-center justify-center shadow-sm">BN</button>
                   )}
-                  <p id={`body-text-${idx}`} data-lang="en" className="text-[16.5px] text-gray-700 leading-[1.9] whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: section.body }} />
+                  <p id={`body-text-${idx}`} data-lang="en" className="text-[15.5px] text-gray-700 leading-[1.9] whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: section.body }} />
                 </div>
               )}
 
@@ -746,7 +914,7 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
                         container.setAttribute('data-lang', isBn ? 'en' : 'bn');
                         const listItems = isBn ? section.list : section.listBn;
                         container.innerHTML = listItems.map((item: string, i: number) => `
-                          <li class="flex items-start gap-3 text-[16.5px] text-gray-700 leading-[1.9] py-2 border-b border-gray-50">
+                          <li class="flex items-start gap-3 text-[15.5px] text-gray-700 leading-[1.9] py-2 border-b border-gray-50">
                             <span class="text-[14px] font-bold text-[#5cb85c] min-w-[22px] flex-shrink-0 mt-0.5">${String(i + 1).padStart(2, "0")}.</span>
                             ${item}
                           </li>
@@ -758,9 +926,9 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
                   )}
                   <ol id={`list-container-${idx}`} data-lang="en" className="flex flex-col gap-2">
                     {section.list.map((item: string, i: number) => (
-                      <li key={i} className="flex items-start gap-3 text-[16.5px] text-gray-700 leading-[1.9] py-2 border-b border-gray-50">
+                      <li key={i} className="flex items-start gap-3 text-[15.5px] text-gray-700 leading-[1.9] py-2 border-b border-gray-50">
                         <span className="text-[14px] font-bold text-[#5cb85c] min-w-[22px] flex-shrink-0 mt-0.5">{String(i + 1).padStart(2, "0")}.</span>
-                        {item}
+                        <span dangerouslySetInnerHTML={{ __html: item }} />
                       </li>
                     ))}
                   </ol>
@@ -781,7 +949,7 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
                       }
                     }} id={`extra-btn-${idx}`} className="absolute -left-10 top-0 text-[12px] font-bold border border-gray-200 bg-gray-50 hover:bg-[#f0faf0] text-gray-400 hover:text-[#5cb85c] hover:border-[#5cb85c] px-1.5 py-0.5 rounded cursor-pointer transition-all opacity-0 group-hover/tblock:opacity-100 flex items-center justify-center shadow-sm">BN</button>
                   )}
-                  <p id={`extra-text-${idx}`} data-lang="en" className="text-[16.5px] text-gray-700 leading-[1.9] whitespace-pre-wrap">{section.extra}</p>
+                  <p id={`extra-text-${idx}`} data-lang="en" className="text-[15.5px] text-gray-700 leading-[1.9] whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: section.extra }} />
                 </div>
               )}
 
@@ -834,6 +1002,76 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
             {relatedPosts.slice(0, 4).map((rp) => <RelatedCard key={rp.id} post={rp} onSelect={onBack ?? (() => {})} />)}
           </div>
+        </div>
+      )}
+
+      {/* Premium Floating Hover Card Tooltip */}
+      {hoveredKeyword && (
+        <div
+          style={{
+            position: 'absolute',
+            top: tooltipCoords.top,
+            left: tooltipCoords.left,
+            width: '320px',
+            zIndex: 100,
+          }}
+          onMouseEnter={() => {
+            setIsHoveringTooltip(true);
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+          }}
+          onMouseLeave={() => {
+            setIsHoveringTooltip(false);
+            hideTooltip();
+          }}
+          className="bg-white/95 backdrop-blur-md border border-gray-100 shadow-xl rounded-2xl p-4 flex flex-col gap-3 animate-fade-in transition-all duration-300 pointer-events-auto"
+        >
+          <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+            <span className="text-[10px] font-bold text-[#5cb85c] uppercase tracking-wider">Related to: &quot;{hoveredKeyword}&quot;</span>
+            <span className="text-[9px] font-medium text-gray-400">Hover Highlight</span>
+          </div>
+          
+          {(() => {
+            const related = getCorrespondingBlogs(hoveredKeyword);
+            if (related.length === 0) {
+              return (
+                <p className="text-[11.5px] text-gray-400 italic py-2 text-center">
+                  No related posts found for this keyword.
+                </p>
+              );
+            }
+            return (
+              <div className="flex flex-col gap-2.5 max-h-[250px] overflow-y-auto pr-1">
+                {related.map((blog) => {
+                  const blogCategory = typeof blog.category === 'object' ? blog.category?.name : blog.category;
+                  const blogSlug = blog.slug || blog.id;
+                  return (
+                    <a
+                      key={blog.id}
+                      href={`/my-feed/${blogSlug}`}
+                      className="flex gap-2.5 hover:bg-gray-50 p-1.5 rounded-xl transition-colors group/item"
+                    >
+                      <div className="relative w-14 h-11 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+                        <Image
+                          src={blog.image || blog.main_image || "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=120&h=80&fit=crop"}
+                          alt={blog.title}
+                          fill
+                          className="object-cover group-hover/item:scale-105 transition-transform duration-300"
+                          sizes="56px"
+                          unoptimized
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="block text-[8.5px] font-extrabold text-[#5cb85c] uppercase">{blogCategory || "Business"}</span>
+                        <h4 className="text-[11px] font-bold text-gray-800 leading-snug line-clamp-2 group-hover/item:text-[#5cb85c] transition-colors">
+                          {blog.title}
+                        </h4>
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
