@@ -31,18 +31,7 @@ interface BlogPost {
   comments?: number;
 }
 
-/* --- Categories --- */
-const CATEGORIES = [
-  "All",
-  "Finance",
-  "Investment",
-  "Tax & Legal",
-  "Healthcare",
-  "Data Privacy",
-  "Real Estate",
-  "Digital Assets",
-  "Artificial Intelligence",
-];
+
 
 /* --- Skeleton Card --- */
 function BlogCardSkeleton() {
@@ -219,7 +208,7 @@ const topStories = [
 ];
 
 /* --- Right Sidebar --- */
-function TopStoriesSidebar() {
+function TopStoriesSidebar({ trendingTags, onTagClick }: { trendingTags: string[], onTagClick: (tag: string) => void }) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? topStories : topStories.slice(0, 4);
 
@@ -272,14 +261,18 @@ function TopStoriesSidebar() {
           Trending in Business
         </h3>
         <ul className="flex flex-col gap-3">
-          {["#AIStartups", "#ProductLed", "#BootstrapLife", "#B2BSaaS", "#VentureCapital"].map(
+          {(trendingTags.length > 0 ? trendingTags : ["Business", "Growth", "Finance"]).map(
             (tag, i) => (
-              <li key={tag} className="flex items-center justify-between">
+              <li 
+                key={tag} 
+                className="flex items-center justify-between cursor-pointer group hover:bg-gray-50 p-2 -mx-2 rounded-xl transition-colors"
+                onClick={() => onTagClick(tag)}
+              >
                 <div className="flex flex-col">
                   <span className="text-[10px] text-gray-400 font-medium">
                     #{i + 1} trending
                   </span>
-                  <span className="text-[12px] font-bold text-gray-700">
+                  <span className="text-[12px] font-bold text-gray-700 group-hover:text-[#5cb85c] transition-colors">
                     {tag}
                   </span>
                 </div>
@@ -298,6 +291,8 @@ export default function BusinessFeed() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [allPosts, setAllPosts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<string[]>(["All"]);
+  const [trendingTags, setTrendingTags] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -339,6 +334,26 @@ export default function BusinessFeed() {
           };
         });
         setAllPosts(mapped);
+
+        // Extract dynamic categories
+        const cats = Array.from(new Set(mapped.map((p: any) => p.category))).filter(Boolean) as string[];
+        setCategories(["All", ...cats]);
+
+        // Extract dynamic tags
+        const tagCounts: Record<string, number> = {};
+        mapped.forEach((p: any) => {
+          if (Array.isArray(p.tags)) {
+            p.tags.forEach((t: string) => {
+              if (t) tagCounts[t] = (tagCounts[t] || 0) + 1;
+            });
+          }
+        });
+        const sortedTags = Object.entries(tagCounts)
+          .sort((a, b) => b[1] - a[1])
+          .map(t => t[0])
+          .slice(0, 5); // top 5 trending tags
+        setTrendingTags(sortedTags);
+
       } finally {
         setIsLoading(false);
       }
@@ -385,7 +400,7 @@ export default function BusinessFeed() {
 
         {/* Category Tabs */}
         <div className="flex items-center gap-1 flex-wrap">
-          {CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
@@ -426,7 +441,7 @@ export default function BusinessFeed() {
       </div>
 
       {/* Right Sidebar */}
-      <TopStoriesSidebar />
+      <TopStoriesSidebar trendingTags={trendingTags} onTagClick={(tag) => setSearchQuery(tag)} />
     </div>
   );
 }

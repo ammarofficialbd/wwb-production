@@ -11,15 +11,19 @@ import {
   ChevronDown,
   User as UserIcon,
   Menu,
+  Calculator,
 } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { useAuth } from "@/context/AuthContext";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const navItems = [
-  { label: "Dashboard", icon: LayoutGrid, active: true },
-  { label: "Transactions", icon: ArrowLeftRight },
-  { label: "Report", icon: BarChart2 },
-  { label: "Payment", icon: CreditCard },
+  { label: "Dashboard", icon: LayoutGrid, href: "/" },
+  { label: "Calculator", icon: Calculator, href: "/calculator" },
+  { label: "Transactions", icon: ArrowLeftRight, href: "/transactions" },
+  { label: "Report", icon: BarChart2, href: "/report" },
+  { label: "Payment", icon: CreditCard, href: "/payment" },
 ];
 
 interface TopNavProps {
@@ -30,6 +34,7 @@ interface TopNavProps {
 
 export default function TopNav({ onToggleSidebar, isSidebarCollapsed, onToggleMobileMenu }: TopNavProps) {
   const { user, setShowLoginModal, setShowChatPanel } = useAuth();
+  const pathname = usePathname();
 
   return (
     <header className="top-nav flex items-center w-full">
@@ -44,19 +49,20 @@ export default function TopNav({ onToggleSidebar, isSidebarCollapsed, onToggleMo
 
       {/* Nav tabs - left aligned */}
       <nav className="top-nav__tabs hidden sm:flex">
-        {navItems.map(({ label, icon: Icon, active }) =>
-          active ? (
-            <button key={label} className="top-nav__tab top-nav__tab--active">
+        {navItems.map(({ label, icon: Icon, href }) => {
+          const active = pathname === href;
+          return active ? (
+            <Link key={label} href={href} className="top-nav__tab top-nav__tab--active">
               <Icon size={15} strokeWidth={2.5} />
               {label}
-            </button>
+            </Link>
           ) : (
-            <button key={label} className="top-nav__tab top-nav__tab--idle">
+            <Link key={label} href={href} className="top-nav__tab top-nav__tab--idle">
               <Icon size={15} strokeWidth={2} />
               {label}
-            </button>
-          )
-        )}
+            </Link>
+          );
+        })}
       </nav>
 
       {/* Right actions */}

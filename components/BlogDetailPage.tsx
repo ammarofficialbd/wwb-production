@@ -91,7 +91,7 @@ function highlightText(html: string) {
     // Highlight matching keywords
     return part.replace(keywordRegex, (match) => {
       const palette = getKeywordPalette(match);
-      return `<span class="keyword-highlight cursor-pointer transition-colors px-2.5 py-0.5 mx-0.5 rounded font-semibold" style="color: ${palette.text}; background-color: ${palette.bg};" data-keyword="${match}">${match}</span>`;
+      return `<span class="keyword-highlight cursor-pointer transition-colors hover:opacity-80 font-semibold" style="color: ${palette.text};" data-keyword="${match}">${match}</span>`;
     });
   });
   
@@ -303,7 +303,7 @@ function VerticalAdBanner() {
 /* ─── Right Sidebar ─── */
 function RightSidebar({ category }: { category: string }) {
   return (
-    <aside className="w-[272px] flex-shrink-0 flex flex-col gap-4 sticky top-6 max-h-[calc(100vh-48px)] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <aside className="w-full lg:w-[272px] flex-shrink-0 flex flex-col gap-4 lg:sticky top-6 lg:max-h-[calc(100vh-48px)] overflow-y-visible lg:overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
 
       {/* Trending Posts */}
       <div className="bg-white rounded-[22px] p-5 border border-gray-100 shadow-sm">
@@ -671,13 +671,13 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
       </div>
 
       {/* ── Hero Row: 75% content + 25% ads — aligns with content area below ── */}
-      <div className="flex gap-5 items-start mb-5">
+      <div className="flex flex-col lg:flex-row gap-5 items-start mb-5">
 
         {/* LEFT: Hero content (flex-1, same width as left-sidebar + gap + article) */}
         <div className="flex-1 min-w-0 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
 
           {/* Top section: tags + title + meta + actions */}
-          <div className="px-8 pt-8 pb-5 flex flex-col gap-4">
+          <div className="px-4 md:px-8 pt-5 md:pt-8 pb-5 flex flex-col gap-4">
             {/* Tags */}
             <div className="flex gap-2 flex-wrap">
               {content.tags.map((tag: string) => (
@@ -745,7 +745,7 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
           </div>
 
           {/* Hero image — full bleed bottom */}
-          <div className="relative w-full flex-1" style={{ minHeight: "700px" }}>
+          <div className="relative w-full flex-1 min-h-[300px] md:min-h-[500px] lg:min-h-[700px]">
             <Image src={content.image} alt={post.title} fill className="object-cover" sizes="(max-width: 1024px) 100vw, 75vw" priority unoptimized />
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
             {/* Category chip over image */}
@@ -756,7 +756,7 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
         </div>
 
         {/* RIGHT: Ads poster column — fixed 272px, matches right sidebar width below */}
-        <div className="w-[272px] flex-shrink-0 flex flex-col gap-4">
+        <div className="w-full lg:w-[272px] flex-shrink-0 flex flex-col gap-4">
 
           {/* Featured Sponsor Card */}
           <div className="relative rounded-[22px] overflow-hidden border border-gray-100 shadow-sm bg-white">
@@ -850,7 +850,7 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
       </div>
 
       {/* ── Content Area: Left sidebar + Article + Right sidebar ── */}
-      <div className="flex gap-5 items-start mb-5">
+      <div className="flex flex-col lg:flex-row gap-5 items-start mb-5">
 
         {/* Left sidebar — TOC + ads + products */}
         <aside className="w-[240px] flex-shrink-0 hidden lg:flex flex-col gap-4 sticky top-6 max-h-[calc(100vh-48px)] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -866,7 +866,7 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
         </aside>
 
         {/* Article body */}
-        <div className="flex-1 min-w-0 bg-white rounded-3xl p-8 border border-gray-100 shadow-sm flex flex-col gap-7">
+        <div className="flex-1 min-w-0 w-full bg-white rounded-3xl p-4 sm:p-6 md:p-8 border border-gray-100 shadow-sm flex flex-col gap-7">
           {content.sections.map((section: any, idx: number) => (
             <section key={section.id || idx} id={section.id || `section-${idx}`} className="flex flex-col gap-4 relative">
               
@@ -999,7 +999,7 @@ export default function BlogDetailPage({ post, onBack, relatedPosts = [] }: Blog
       {relatedPosts.length > 0 && (
         <div>
           <h2 className="text-[1.1rem] font-extrabold text-gray-900 mb-4">Related Articles</h2>
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {relatedPosts.slice(0, 4).map((rp) => <RelatedCard key={rp.id} post={rp} onSelect={onBack ?? (() => {})} />)}
           </div>
         </div>
